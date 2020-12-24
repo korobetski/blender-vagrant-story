@@ -1,6 +1,7 @@
 # Vagrant Story Blender addon
 
 Blender addon for importing / exporting Vagrant Story (Squaresoft 2000) file formats
+
 Vagrant Story files formats are mostly explained here : http://datacrystal.romhacking.net/wiki/Vagrant_Story:File_formats
 
 <img src="https://github.com/korobetski/blender-vagrant-story/raw/master/export.png"/>
@@ -12,6 +13,7 @@ The goal of this addon is mainly for modding purpose, use with cautions
 # Supported Formats :
 
 For now the only format supported for import and export is *.WEP Weapon Model format
+
 Maybe more formats in the future...
 
 # Limitations :
@@ -26,10 +28,16 @@ if you want to change textures you can just use colors defined by pallets and ad
 This section is also the biggest part of the WEP format weight (~75%), so making textures in higher resolution can cause memory burden quickly.
 Considering all these things, modifying textures in an efficient way can be an hard task, and maybe not fully supported by this addon yet anyway.
 - in the original game *.WEP file size is between 2ko and 7ko so keep an eye on this before patching VS with a too big .WEP
+- before exporting, make sure one object with a mesh is selected in Blender
+
+# Warnings :
+
+This script may contains bugs and patching Vagrant Story with an exported file form it haven't be tested yet
 
 # Instalation :
 
 In Blender 2.91 go to Edit / Preferences...
+
 in Addons window clic install and choose <a href="https://github.com/korobetski/blender-vagrant-story/raw/master/vs_blender.py">vs_blender.py</a> file downloaded from this repository
 
 # Discord :
