@@ -2,6 +2,7 @@ import bpy
 import bmesh
 import struct
 import os
+import math
 
 from bpy_extras.io_utils import (ImportHelper,
                                  ExportHelper)
@@ -16,16 +17,16 @@ bl_info = {
     "name": "Vagrant Story formats Add-on",
     "description": "Import-Export Vagrant Story WEP mesh format.",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version":(1, 0),
+    "version":(1, 1),
     "blender": (2, 91, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
 
 class ImportWEP(bpy.types.Operator, ImportHelper):
-    """Load a WEP Mesh file"""
+    """Load a WEP file"""
     bl_idname = "import_mesh.wep"
-    bl_label = "Import WEP Mesh"
+    bl_label = "Import WEP"
     filename_ext = ".WEP"
 
     filepath : bpy.props.StringProperty(default="",subtype="FILE_PATH")
@@ -36,21 +37,14 @@ class ImportWEP(bpy.types.Operator, ImportHelper):
             'axis_up',
             'filter_glob',
         ))
-        mesh = loadWEP(self, context, **keywords)
-        if not mesh:
-            return {'CANCELLED'}
+        loadWEP(self, context, **keywords)
 
-        blender_obj = bpy.data.objects.new(str(bpy.path.display_name_from_filepath(keywords["filepath"])), object_data=mesh)
-        view_layer = bpy.context.view_layer
-        view_layer.active_layer_collection.collection.objects.link(blender_obj)
-        blender_obj.select_set(True)
-        view_layer.objects.active = blender_obj
         return {'FINISHED'}
 
 class ExportWEP(bpy.types.Operator, ExportHelper):
-    """Save a WEP Mesh file"""
+    """Save a WEP file"""
     bl_idname = "export_mesh.wep"
-    bl_label = "Export WEP Mesh"
+    bl_label = "Export WEP"
     check_extension = True
     filename_ext = ".WEP"
 
@@ -64,15 +58,35 @@ class ExportWEP(bpy.types.Operator, ExportHelper):
         ))
         return saveWEP(self, context, **keywords)
 
+class ImportZUD(bpy.types.Operator, ImportHelper):
+    """Load a ZUD file"""
+    bl_idname = "import_mesh.zud"
+    bl_label = "Import ZUD"
+    filename_ext = ".ZUD"
+
+    filepath : bpy.props.StringProperty(default="",subtype="FILE_PATH")
+    filter_glob : bpy.props.StringProperty(default="*.ZUD", options={'HIDDEN'})
+
+    def execute(self, context):
+        keywords = self.as_keywords(ignore=('axis_forward',
+            'axis_up',
+            'filter_glob',
+        ))
+        loadZUD(self, context, **keywords)
+
+        return {'FINISHED'}
+
 def menu_func_import(self, context):
-    self.layout.operator(ImportWEP.bl_idname, text="Vagrant Story WEP Mesh (.WEP)")
+    self.layout.operator(ImportWEP.bl_idname, text="Vagrant Story Weapon (.WEP)")
+    #self.layout.operator(ImportZUD.bl_idname, text="Vagrant Story Zone Unit Datas (.ZUD)")
 
 def menu_func_export(self, context):
-    self.layout.operator(ExportWEP.bl_idname, text="Vagrant Story WEP Mesh (.WEP)")
+    self.layout.operator(ExportWEP.bl_idname, text="Vagrant Story Weapon (.WEP)")
 
 classes = (
     ImportWEP,
     ExportWEP,
+    ImportZUD,
 )
 
 VS_HEADER = b"H01\x00"
@@ -117,6 +131,14 @@ def loadWEP(operator, context, filepath):
 
     parseVertexSection(file, wep)
 
+    # hard fixes for staves 39.WEP to 3F.WEP
+    staves = ["39", "3A", "3B", "3C", "3D", "3E", "3F"]
+    if staves.__contains__(str(bpy.path.display_name_from_filepath(filepath))):
+        # its a staff, so we need to correct vertices of the first group
+        for i in range(wep.groups[0].numVertices):
+            wep.vertices[i].x = wep.groups[0].bone.length * 2 - wep.vertices[i].x # its work but why ?
+            wep.vertices[i].y = -wep.vertices[i].y # simple invert
+
     # WEP FACES SECTION
     if wep.polygonPtr != file.tell():
         print("Pointer polygon : bad position")
@@ -130,6 +152,14 @@ def loadWEP(operator, context, filepath):
         file.seek(wep.texturePtr)
 
     parseTextureSection(file, wep)
+
+    # Default Rotation
+    for i in range(0,3): # 3 axis
+        u1, angle, u3, u4 = struct.unpack(">4h", file.read(8))
+        angle = angle / 2
+        print("u1 : "+repr(u1)+"  angle : "+repr(angle)+"  u3 : "+repr(u3)+"  u4 : "+repr(u4))
+
+        wep.rotations.append([u1, angle, u3, u4])
 
     # EOF
     file.close()
@@ -172,8 +202,17 @@ def loadWEP(operator, context, filepath):
         for vert_idx, loop_idx in zip(face.vertices, face.loop_indices):
             # uvs needs to be scaled from texture W&H
             uvlayer.data[loop_idx].uv = (face_uvs[loop_idx][0]/(wep.tim.textureWidth-1), face_uvs[loop_idx][1]/(wep.tim.textureHeigth-1))
-    
-    return blender_mesh
+
+    # Creating Blender object and link into the current collection
+    blender_obj = bpy.data.objects.new(str(bpy.path.display_name_from_filepath(filepath)), object_data=blender_mesh)
+    view_layer = bpy.context.view_layer
+    view_layer.active_layer_collection.collection.objects.link(blender_obj)
+    blender_obj.select_set(True)
+    # maybe axis arn't the same in VS and Blender, we should care
+    blender_obj.rotation_euler = (math.radians(wep.rotations[0][1]), math.radians(wep.rotations[1][1]), math.radians(wep.rotations[2][1]))
+    view_layer.objects.active = blender_obj
+
+    return {'FINISHED'}
 
 def saveWEP(operator, context, filepath):
     scene = context.scene
@@ -191,6 +230,26 @@ def saveWEP(operator, context, filepath):
     fp.close()
 
     return {'FINISHED'}
+
+def loadZUD(operator, context, filepath):
+    file = open(filepath, "rb")
+    zud =  VSZUDHeader()
+    zud.feed(file)
+    # EOF
+    file.close()
+
+    # Creating Geometry and Mesh for Blender
+    #mesh_name = bpy.path.display_name_from_filepath(filepath)
+    #blender_mesh = bpy.data.meshes.new(name=mesh_name+"_MESH")
+    #blender_obj = bpy.data.objects.new(mesh_name, object_data=blender_mesh)
+    #view_layer = bpy.context.view_layer
+    #view_layer.active_layer_collection.collection.objects.link(blender_obj)
+    #blender_obj.select_set(True)
+    #view_layer.objects.active = blender_obj
+
+
+
+
 
 def parseBoneSection(file, mesh):
     mesh.bones = []
@@ -266,6 +325,7 @@ class VSWEPHeader:
         self.vertices = []
         self.faces = []
         self.tim = VSWEPTIM()
+        self.rotations = []
     def __repr__(self):
         return "(--WEP-- | "+ " numBones : "+repr(self.numBones)+ " numGroups : "+repr(self.numGroups)+ " numTri : "+repr(self.numTri)+ " numQuad : "+repr(self.numQuad)+ " numFace : "+repr(self.numFace) + " bonePtr : "+repr(self.bonePtr)+ " groupPtr : "+repr(self.groupPtr)+ " vertexPtr : "+repr(self.vertexPtr)+ " polygonPtr : "+repr(self.polygonPtr)+ " texturePtr : "+repr(self.texturePtr)+")"
     def getLastGroupVNum(self):
@@ -324,11 +384,13 @@ class VSWEPHeader:
         for face in self.faces:
             bin += (face.tobin())
         bin += (self.tim.tobin())
+        # Default Rotation
+        for i in range(0,3): # 3 axis
+            bin += struct.pack("4h", 0, 0, 0, 1792)
         return bin
     def fromBlenderMesh(self, blender_mesh):
         verts = blender_mesh.vertices[:]
         facets = [ f for f in blender_mesh.polygons ]
-
         self.numBones = 2 # bone 0, is never used by groups, but maybe it is used by VS
         self.numGroups = 1 # we will simplify the WEP output as much as possible
         self.numTri = 0 # need to be determinated
@@ -570,7 +632,7 @@ class VSVertex:
         self.w = 0 # always 00
         self.index = -1
     def __repr__(self):
-        return "(VERTEX : " + " index = " + repr(self.index) + " [x:" + repr(self.x) + ", y:" + repr(self.y) + ", z:" + repr(self.z)+"] )"
+        return "(VERTEX : " + " index = " + repr(self.index) + " [x:" + repr(self.x) + ", y:" + repr(self.y) + ", z:" + repr(self.z) + ", w:" + repr(self.w)+"] )"
     def feed(self, file, i):
         self.index = i
         self.x, self.y, self.z, self.w = struct.unpack("4h", file.read(8))
@@ -586,43 +648,46 @@ class VSVertex:
         return (self.x/100, self.y/100, self.z/100)
 
 class VSFace:
-    def __init__(self, _type=0, size=0, side=0, alpha=0, verticesCount=3, vertices=[], uv=[], colors=[]):
+    def __init__(self, _type=0, size=0, side=0, flag=0, verticesCount=3, vertices=[], uv=[], colors=[]):
+        self.index = 0
         self.type = _type
         self.size = size
         self.side = side
-        self.alpha = alpha
+        self.flag = flag
         self.verticesCount = verticesCount
         self.vertices = vertices
         self.uv = uv
         self.colors = colors
     def default(self):
+        self.index = 0
         self.type = 0
         self.size = 0
-        self.side = 0
-        self.alpha = 0
+        self.side = 0 # 4 = normal, 5 double sided ?
+        self.flag = 0 # when != 0 face has a weird behaviour seems not related to alpha
         self.verticesCount = 3
         self.vertices = []
         self.uv = []
         self.colors = []
     def __repr__(self):
-        return "(FACE : " + " type = "+ repr(self.type) + " size = "+ repr(self.size) + " side = "+ repr(self.side) + " alpha = "+ repr(self.alpha) + " verticesCount = "+ repr(self.verticesCount) + ")"
+        return "(FACE : "+ " index = "+ repr(self.index) + " type = "+ repr(self.type) + " size = "+ repr(self.size) + " side = "+ repr(self.side) + " flag = "+ repr(self.flag) + " vertices = "+ repr(self.vertices) + ")"
     def feed(self, file, i):
-        # TODO : handle v colored faces
-        self.type, self.size, self.side, self.alpha = struct.unpack("4B", file.read(4))
+        self.index = i
+        # TODO : handle v colored faces for SHP
+        self.type, self.size, self.side, self.flag = struct.unpack("4B", file.read(4))
         if self.type == 0x24 or self.type == 0x34:
             self.verticesCount = 3
         elif self.type == 0x2C or self.type == 0x3C:
             self.verticesCount = 4
         for i in range(0, self.verticesCount):
             vidx = struct.unpack("H", file.read(2))[0]
-            vidx = vidx / 4
+            vidx = int(vidx / 4)
             self.vertices.append(vidx)
         for i in range(0, self.verticesCount):
             self.uv.append(struct.unpack("2B", file.read(2)))
             self.colors.append((0, 0, 0, 0))
     def tobin(self):
         bin = bytes()
-        bin += (struct.pack("4B", self.type, self.size, self.side, self.alpha))
+        bin += (struct.pack("4B", self.type, self.size, self.side, self.flag))
         for i in range(0, self.verticesCount):
             bin += (struct.pack("H", int(self.vertices[i] * 4))) # v index should be multiply by 4 for the WEP format
         for i in range(0, self.verticesCount):
@@ -790,3 +855,30 @@ class VSWEPTIM:
         size += 32 * 2 * 7 # pallets colors
         size += self.textureWidth * self.textureHeigth # clut one byte per pixel
         return size
+
+class VSZUDHeader:
+    def __init__(self):
+        self.idSHP = 0
+        self.idWEP = 0
+        self.idWEPType = 0
+        self.idWEPMat = 0
+        self.idWEP2 = 0
+        self.idWEP2Mat = 0
+        self.uk = 0
+        self.pad = 0
+        self.ptrSHP = 0
+        self.lenSHP = 0
+        self.ptrWEP = 0
+        self.lenWEP = 0
+        self.ptrWEP2 = 0
+        self.lenWEP2 = 0
+        self.ptrCSEQ = 0
+        self.lenCSEQ = 0
+        self.ptrBSEQ = 0
+        self.lenBSEQ  = 0
+    def __repr__(self):
+        return "(--ZUD-- | "+ " idSHP : "+ repr(self.idSHP)+ " idWEP : "+ repr(self.idWEP)+ " idWEPType : "+ repr(self.idWEPType)+ " idWEPMat : "+ repr(self.idWEPMat)+ " idWEP2 : "+ repr(self.idWEP2)+ " idWEP2Mat : "+ repr(self.idWEP2Mat)+ " uk : "+ repr(self.uk)+ " pad : "+ repr(self.pad)+")"
+    def feed(self, file):
+        self.idSHP, self.idWEP, self.idWEPType, self.idWEPMat, self.idWEP2, self.idWEP2Mat, self.uk, self.pad = struct.unpack("8B", file.read(8))
+        self.ptrSHP, self.lenSHP, self.ptrWEP, self.lenWEP, self.ptrWEP2, self.lenWEP2, self.ptrCSEQ, self.lenCSEQ, self.ptrBSEQ, self.lenBSEQ = struct.unpack("10I", file.read(40))
+        print(self)
