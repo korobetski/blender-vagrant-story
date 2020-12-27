@@ -14,12 +14,15 @@ The goal of this addon is mainly for modding purpose, use with cautions
 
 For now the only format supported for import and export is *.WEP Weapon Model format
 
+Work in progress SHP import
+
 Maybe more formats in the future...
 
 # Limitations :
 
 WEP format can handle complex geometry, but you must take care of fee things :
-- imported WEP can contains mistakes
+- maximum vertices count must be 0xFFFF / 4 = 16 383, because faces store vertex indexes in uint16 then divide values by 4
+- imported meshes can contains mistakes (we don't everythings about Vagrant Story formats)
 - double sided faces arn't supported yet, the information is lost for export for now
 - vertices position are stored in int16 for 3 axis, so float values will be rounded
 - face can be Triangle or Quad, but Ngon arn't possible yet

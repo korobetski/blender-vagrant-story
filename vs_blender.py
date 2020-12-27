@@ -41,22 +41,23 @@ class ImportWEP(bpy.types.Operator, ImportHelper):
 
         return {'FINISHED'}
 
-class ExportWEP(bpy.types.Operator, ExportHelper):
-    """Save a WEP file"""
-    bl_idname = "export_mesh.wep"
-    bl_label = "Export WEP"
-    check_extension = True
-    filename_ext = ".WEP"
+class ImportSHP(bpy.types.Operator, ImportHelper):
+    """Load a SHP file"""
+    bl_idname = "import_mesh.shp"
+    bl_label = "Import SHP"
+    filename_ext = ".SHP"
 
-    filter_glob : bpy.props.StringProperty(default="*.WEP", options={'HIDDEN'})
+    filepath : bpy.props.StringProperty(default="",subtype="FILE_PATH")
+    filter_glob : bpy.props.StringProperty(default="*.SHP", options={'HIDDEN'})
 
     def execute(self, context):
         keywords = self.as_keywords(ignore=('axis_forward',
             'axis_up',
             'filter_glob',
-            'check_existing',
         ))
-        return saveWEP(self, context, **keywords)
+        loadSHP(self, context, **keywords)
+
+        return {'FINISHED'}
 
 class ImportZUD(bpy.types.Operator, ImportHelper):
     """Load a ZUD file"""
@@ -76,8 +77,27 @@ class ImportZUD(bpy.types.Operator, ImportHelper):
 
         return {'FINISHED'}
 
+class ExportWEP(bpy.types.Operator, ExportHelper):
+    """Save a WEP file"""
+    bl_idname = "export_mesh.wep"
+    bl_label = "Export WEP"
+    check_extension = True
+    filename_ext = ".WEP"
+
+    filter_glob : bpy.props.StringProperty(default="*.WEP", options={'HIDDEN'})
+
+    def execute(self, context):
+        keywords = self.as_keywords(ignore=('axis_forward',
+            'axis_up',
+            'filter_glob',
+            'check_existing',
+        ))
+        return saveWEP(self, context, **keywords)
+
+
 def menu_func_import(self, context):
     self.layout.operator(ImportWEP.bl_idname, text="Vagrant Story Weapon (.WEP)")
+    self.layout.operator(ImportSHP.bl_idname, text="Vagrant Story Character Shape (.SHP)")
     #self.layout.operator(ImportZUD.bl_idname, text="Vagrant Story Zone Unit Datas (.ZUD)")
 
 def menu_func_export(self, context):
@@ -85,8 +105,9 @@ def menu_func_export(self, context):
 
 classes = (
     ImportWEP,
-    ExportWEP,
+    ImportSHP,
     ImportZUD,
+    ExportWEP,
 )
 
 VS_HEADER = b"H01\x00"
@@ -191,8 +212,6 @@ def loadWEP(operator, context, filepath):
     blender_mesh.from_pydata(wep.getVerticesForBlender(), [], wep.getFacesForBlender())
     # TODO : we need to handle double sided faces
     blender_mesh.materials.append(mat)
-    blender_mesh.validate()
-    blender_mesh.update()
 
     # Creating UVs for Blender
     uvlayer = blender_mesh.uv_layers.new()
@@ -211,6 +230,8 @@ def loadWEP(operator, context, filepath):
     # maybe axis arn't the same in VS and Blender, we should care
     blender_obj.rotation_euler = (math.radians(wep.rotations[0][1]), math.radians(wep.rotations[1][1]), math.radians(wep.rotations[2][1]))
     view_layer.objects.active = blender_obj
+    blender_mesh.validate()
+    blender_mesh.update()
 
     return {'FINISHED'}
 
@@ -231,6 +252,158 @@ def saveWEP(operator, context, filepath):
 
     return {'FINISHED'}
 
+def loadSHP(operator, context, filepath):
+    file = open(filepath, "rb")
+    file_size = os.stat(filepath).st_size
+    signature = file.read(4)
+    if signature != VS_HEADER:
+        return {'CANCELLED'}
+    
+    # SHP HEADER
+    shp =  VSSHPHeader()
+    shp.feed(file)
+    print(shp)
+
+    print("file.tell : "+repr(file.tell()))
+
+    # SHP BONES SECTION
+    parseBoneSection(file, shp)
+
+    
+    # SHP GROUPS SECTION
+    if shp.groupPtr != file.tell():
+        print("Pointer group : bad position -> shp.groupPtr :"+repr(shp.groupPtr)+"  file.tell : "+repr(file.tell()))
+        file.seek(shp.groupPtr)
+
+    parseGroupSection(file, shp)
+
+    # SHP VERTEX SECTION
+    if shp.vertexPtr != file.tell():
+        print("Pointer vertex : bad position")
+        file.seek(shp.vertexPtr)
+
+    parseVertexSection(file, shp)
+
+    # SHP FACES SECTION
+    if shp.polygonPtr != file.tell():
+        print("Pointer polygon : bad position")
+        file.seek(shp.polygonPtr)
+
+    parseFaceSection(file, shp)
+
+    # SHP AKAO SECTION SKIPPED
+    # GOTO MAGIC SECTION
+    file.seek(shp.magicPtr)
+
+    num, magicNum = struct.unpack("2I", file.read(8))
+    if magicNum + file.tell() < file_size: # we make sure we are not outside file size
+        file.seek(magicNum, 1)
+
+    # TEXTURES SECTION
+    shp.tim = VSSHPTIM()
+    shp.tim.feed(file)
+    print(shp.tim)
+
+    # EOF
+    file.close()
+
+    # Creating Material & Textures for Blender
+    # https://docs.blender.org/api/current/bpy.types.Material.html
+    mat = bpy.data.materials.new(name=str(bpy.path.display_name_from_filepath(filepath)+'_Material'))
+    mat.use_nodes = True
+    mat.blend_method = "CLIP" # to handle alpha cutout
+    # maybe i should consider using a simpler material... VS doesn't need a PBR Material :D
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs['Specular'].default_value = 0
+    bsdf.inputs['Metallic'].default_value = 0
+    for i in range(0, len(shp.tim.textures)):
+        texImage = mat.node_tree.nodes.new('ShaderNodeTexImage')
+        texImage.image = bpy.data.images.new(str(bpy.path.display_name_from_filepath(filepath)+'_Tex'+str(i)), shp.tim.textureWidth, shp.tim.textureHeigth)
+        texImage.image.pixels = shp.tim.textures[i]
+        texImage.interpolation = "Closest" # texture filter
+        # we use the first texture for the material by default
+        if i == 0:
+            mat.node_tree.links.new(bsdf.inputs['Base Color'], texImage.outputs['Color'])
+            mat.node_tree.links.new(bsdf.inputs['Alpha'], texImage.outputs['Alpha']) # to handle alpha cutout
+
+    view_layer = bpy.context.view_layer
+    # Creating Bones for Blender
+    armature = bpy.data.armatures.new('Armature')
+    arm_obj = bpy.data.objects.new('Armature', armature)
+    view_layer.active_layer_collection.collection.objects.link(arm_obj)
+    armature_data = arm_obj
+    #Must make armature active and in edit mode to create a bone
+    view_layer.objects.active = armature_data
+    bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+    edit_bones = armature_data.data.edit_bones
+    for vs_bone in shp.bones:
+        blender_bone = edit_bones.new(vs_bone.name)
+        if vs_bone.parent is None:
+            blender_bone.head = (0, 0, 0)
+            blender_bone.tail = (0, -1, 0)
+        else:
+            blender_bone.parent = edit_bones[vs_bone.parent.name]
+            if vs_bone.parentIndex != 0:
+                blender_bone.head = blender_bone.parent.tail
+            else:
+                blender_bone.head = (0, 0, 0)
+            blender_bone.tail = (blender_bone.head[0] + vs_bone.length / 100, 0, 0)
+
+    # exit edit mode to save bones so they can be used in pose mode
+    bpy.ops.object.mode_set(mode='OBJECT')
+    # Creating Geometry and Mesh for Blender
+    mesh_name = bpy.path.display_name_from_filepath(filepath)
+    blender_mesh = bpy.data.meshes.new(name=mesh_name+"_MESH")
+    blender_mesh.from_pydata(shp.getVerticesForBlender(), [], shp.getFacesForBlender())
+    blender_obj = bpy.data.objects.new(mesh_name, object_data=blender_mesh)
+    blender_mesh.materials.append(mat)
+    # Creating vertices groups
+    lastv = 0
+    for vs_group in shp.groups:
+        blender_group = blender_obj.vertex_groups.new( name = vs_group.bone.name )
+        indexes = []
+        for i in range(lastv, vs_group.numVertices):
+            indexes.append(i)
+        lastv = vs_group.numVertices
+        blender_group.add(indexes, 1, "REPLACE")
+    
+    view_layer.active_layer_collection.collection.objects.link(blender_obj)
+    blender_obj.select_set(True)
+    view_layer.objects.active = blender_obj
+
+    blender_obj.parent = arm_obj
+    modifier = blender_obj.modifiers.new(type='ARMATURE', name="Armature")
+    modifier.object = arm_obj
+
+    # Creating UVs and Vertex colors for Blender
+    uvlayer = blender_mesh.uv_layers.new()
+    vcol_layer = blender_mesh.vertex_colors.new()
+    colors = shp.getVColForBlender()
+    face_uvs = shp.getUVsForBlender()
+    for face in blender_mesh.polygons:
+        for vert_idx, loop_idx in zip(face.vertices, face.loop_indices):
+            # uvs needs to be scaled from texture W&H
+            uvlayer.data[loop_idx].uv = (face_uvs[loop_idx][0]/(shp.tim.textureWidth - 1), face_uvs[loop_idx][1]/(shp.tim.textureHeigth - 1))
+            vcol_layer.data[loop_idx].color = colors[loop_idx].toFloat()
+
+    blender_mesh.validate()
+    blender_mesh.update()
+    for pbone in arm_obj.pose.bones:
+        pbone.rotation_mode = 'XYZ'  
+    # hard set 00.SHP T-Pose
+    if mesh_name == "00":
+        arm_obj.pose.bones['bone_0'].rotation_euler = (0, math.radians(90), 0)
+        arm_obj.pose.bones['bone_1'].rotation_euler = (0, 0, math.radians(180))
+        arm_obj.pose.bones['bone_3'].rotation_euler = (math.radians(-90), 0, 0)
+        arm_obj.pose.bones['bone_4'].rotation_euler = (math.radians(90), 0, 0)
+        arm_obj.pose.bones['bone_6'].rotation_euler = (math.radians(90), 0, 0)
+        arm_obj.pose.bones['bone_7'].rotation_euler = (math.radians(-90), 0, 0)
+        arm_obj.pose.bones['bone_8'].rotation_euler = (0, math.radians(180), 0)
+        arm_obj.pose.bones['bone_9'].rotation_euler = (0, math.radians(-180), 0)
+        arm_obj.pose.bones['bone_11'].rotation_euler = (math.radians(-90), 0, 0)
+        arm_obj.pose.bones['bone_12'].rotation_euler = (math.radians(90), 0, math.radians(-180))
+        arm_obj.pose.bones['bone_21'].rotation_euler = (0, math.radians(-180), 0)
+
 def loadZUD(operator, context, filepath):
     file = open(filepath, "rb")
     zud =  VSZUDHeader()
@@ -246,10 +419,6 @@ def loadZUD(operator, context, filepath):
     #view_layer.active_layer_collection.collection.objects.link(blender_obj)
     #blender_obj.select_set(True)
     #view_layer.objects.active = blender_obj
-
-
-
-
 
 def parseBoneSection(file, mesh):
     mesh.bones = []
@@ -295,14 +464,16 @@ def parseFaceSection(file, mesh):
     for i in range(0, mesh.totalPoly):
         face = VSFace()
         face.default()
-        face.feed(file, i)
+        face.feed(file, i, mesh.isVertexColored)
+        if face.isColored == True:
+            mesh.isVertexColored = True
         print(face)
         mesh.faces.append(face)
 
 def parseTextureSection(file, mesh):
-    tim = VSWEPTIM()
-    tim.feed(file, mesh)
-    print(tim)
+    mesh.tim = VSWEPTIM()
+    mesh.tim.feed(file)
+    print(mesh.tim)
 
 class VSWEPHeader:
     def __init__(self):
@@ -658,33 +829,64 @@ class VSFace:
         self.vertices = vertices
         self.uv = uv
         self.colors = colors
+        self.isColored = False
     def default(self):
         self.index = 0
         self.type = 0
         self.size = 0
         self.side = 0 # 4 = normal, 5 double sided ?
-        self.flag = 0 # when != 0 face has a weird behaviour seems not related to alpha
+        self.flag = 0 # unknown
         self.verticesCount = 3
         self.vertices = []
         self.uv = []
         self.colors = []
+        self.isColored = False
     def __repr__(self):
         return "(FACE : "+ " index = "+ repr(self.index) + " type = "+ repr(self.type) + " size = "+ repr(self.size) + " side = "+ repr(self.side) + " flag = "+ repr(self.flag) + " vertices = "+ repr(self.vertices) + ")"
-    def feed(self, file, i):
+    def feed(self, file, i, vc = False):
         self.index = i
-        # TODO : handle v colored faces for SHP
         self.type, self.size, self.side, self.flag = struct.unpack("4B", file.read(4))
-        if self.type == 0x24 or self.type == 0x34:
-            self.verticesCount = 3
-        elif self.type == 0x2C or self.type == 0x3C:
-            self.verticesCount = 4
-        for i in range(0, self.verticesCount):
-            vidx = struct.unpack("H", file.read(2))[0]
-            vidx = int(vidx / 4)
-            self.vertices.append(vidx)
-        for i in range(0, self.verticesCount):
-            self.uv.append(struct.unpack("2B", file.read(2)))
-            self.colors.append((0, 0, 0, 0))
+        if vc == False and (self.type == 0x24 or self.type == 0x2C):
+            if self.type == 0x24: # 0x34 is v colored tri
+                self.verticesCount = 3
+            elif self.type == 0x2C: # 0x3C is v colored quad
+                self.verticesCount = 4
+            for i in range(0, self.verticesCount):
+                vidx = struct.unpack("H", file.read(2))[0]
+                vidx = int(vidx / 4)
+                self.vertices.append(vidx)
+            for i in range(0, self.verticesCount):
+                self.uv.append(struct.unpack("2B", file.read(2)))
+                col = VSColor()
+                self.colors.append(col.White())
+        else:
+            # handle v colored faces for special SHP
+            self.isColored = True
+            file.seek(file.tell()-4)
+            # Triangle vt1  vt2  vt3  u1-v1 col1  t  col2   sz col3   sd u2-v2  u3-v3
+            # Quad     vt1  vt2  vt3  vt4   col1  t  col2   sz col3   sd col4   pa u1-v1 u2-v2 u3-v3 u4-v4
+            self.colors = []
+            vIdx = struct.unpack("4H", file.read(8))
+            self.colors.append(VSColor().setRGB(struct.unpack("3B", file.read(3))))
+            self.type = struct.unpack("B", file.read(1))[0]
+            self.colors.append(VSColor().setRGB(struct.unpack("3B", file.read(3))))
+            self.size = struct.unpack("B", file.read(1))[0]
+            self.colors.append(VSColor().setRGB(struct.unpack("3B", file.read(3))))
+            self.side = struct.unpack("B", file.read(1))[0]
+            if self.type == 0x34:
+                self.verticesCount = 3
+                for i in range(0, 3):
+                    self.vertices.append(int(vIdx[i]/4))
+                self.uv.append((vIdx[3]).to_bytes(2, 'little')) # uv1 at the same place of vt4 for quads
+                self.uv.append(struct.unpack("2B", file.read(2)))
+                self.uv.append(struct.unpack("2B", file.read(2)))
+            elif self.type == 0x3C:
+                self.verticesCount = 4
+                self.colors.append(VSColor().setRGB(struct.unpack("3B", file.read(3))))
+                self.flag = struct.unpack("B", file.read(1))[0] # padding
+                for i in range(0, 4):
+                    self.vertices.append(int(vIdx[i]/4))
+                    self.uv.append(struct.unpack("2B", file.read(2)))
     def tobin(self):
         bin = bytes()
         bin += (struct.pack("4B", self.type, self.size, self.side, self.flag))
@@ -692,11 +894,15 @@ class VSFace:
             bin += (struct.pack("H", int(self.vertices[i] * 4))) # v index should be multiply by 4 for the WEP format
         for i in range(0, self.verticesCount):
             bin += (struct.pack("2B", self.uv[i][0], self.uv[i][1]))
+        # TODO : handle vertex colored faces
         return bin
     def binsize(self):
         return self.size
 
 class VSColor:
+    def White(self):
+        self.setRGBA(255,255,255,255)
+        return self
     def __init__(self):
         self.R = 0
         self.G = 0
@@ -706,12 +912,20 @@ class VSColor:
         self.code = "00000000"
     def __repr__(self):
         return "(COLOR : "+repr(self.code)+")"
+    def setRGB(self, rgb):
+        self.R = rgb[0]
+        self.G = rgb[1]
+        self.B = rgb[2]
+        self.A = 255
+        self.update()
+        return self
     def setRGBA(self, r, g, b, a):
         self.R = r
         self.G = g
         self.B = b
         self.A = a
         self.update()
+        return self
     def from16bits(self, H):
         # H must be 2bytes long
         b = (H & 0x7C00) >> 10
@@ -771,7 +985,7 @@ class VSWEPTIM:
         self.cluts = []
     def __repr__(self):
         return "(TIM : "+" texMapSize = "+repr(self.texMapSize)+" unk = "+repr(self.unk)+" halfW = "+repr(self.halfW)+" halfH = "+repr(self.halfH)+" numColor = "+repr(self.numColor)+")"
-    def feed(self, file, mesh):
+    def feed(self, file):
         self.texMapSize, self.unk, self.halfW, self.halfH, self.numColor = struct.unpack("I 4B", file.read(8))
         self.textureWidth = self.halfW * 2
         self.textureHeigth = self.halfH * 2
@@ -820,7 +1034,6 @@ class VSWEPTIM:
                     i += 4
                 i = 0
                 #print("self.palletColors[x] : "+repr(self.palletColors[x]))
-        mesh.tim = self
     def tobin(self):
         bin = bytes()
         bin += (struct.pack("I 4B", self.texMapSize, self.unk, self.halfW, self.halfH, self.numColor))
@@ -831,6 +1044,100 @@ class VSWEPTIM:
                 bin += (struct.pack("H", 65535))
         for i in range(0, 7):
             for j in range(16, 48):
+                if i < len(self.palletColors):
+                    if j < len(self.palletColors[i]):
+                        bin += (struct.pack("H", int(self.palletColors[i][j].to16bits(), 16)))
+                    else:
+                        bin += (struct.pack("H", 65535))
+                else:
+                    bin += (struct.pack("H", 65535))
+
+        i = 0
+        for x in range(0, self.textureWidth):
+            for y in range(0, self.textureHeigth):
+                if i < len(self.cluts):
+                    bin += (struct.pack("B", self.cluts[i]))
+                else:
+                    bin += (b"\x00")
+                i += 1
+        return bin
+    def binsize(self):
+        size = 8 # tim header
+        # we considere 48 colors
+        size += 16 * 2 # handle colors
+        size += 32 * 2 * 7 # pallets colors
+        size += self.textureWidth * self.textureHeigth # clut one byte per pixel
+        return size
+
+class VSSHPTIM:
+    def __init__(self):
+        self.texMapSize = 0
+        self.unk = 0
+        self.halfW = 0
+        self.halfH = 0
+        self.textureWidth = 0
+        self.textureHeigth = 0
+        self.numColor = 0
+        self.palletColors = []
+        self.textures = []
+        self.numPallets = 2
+        self.cluts = []
+        self.doubleClut = False
+    def __repr__(self):
+        return "(TIM : "+" texMapSize = "+repr(self.texMapSize)+" unk = "+repr(self.unk)+" halfW = "+repr(self.halfW)+" halfH = "+repr(self.halfH)+" numColor = "+repr(self.numColor)+")"
+    def feed(self, file):
+        self.texMapSize, self.unk, self.halfW, self.halfH, self.numColor = struct.unpack("I 4B", file.read(8))
+        self.textureWidth = self.halfW * 2
+        if self.doubleClut == True: # when colored faces we must multiply by 4
+            self.textureWidth = self.halfW * 4
+        self.textureHeigth = self.halfH * 2
+        self.textures = []
+        if self.numColor > 0:
+            for i in range(0, self.numPallets):
+                colors = []
+                for j in range(0, int(self.numColor)):
+                    colorData = struct.unpack("H", file.read(2))[0]
+                    color = VSColor()
+                    color.from16bits(colorData)
+                    colors.append(color)
+                self.palletColors.append(colors)
+            # pallet colors indexes
+            cluts = []
+            for x in range(0, self.textureWidth):
+                for y in range(0, self.textureHeigth):
+                    if self.doubleClut == False:
+                        clut = struct.unpack("B", file.read(1))[0]  # CLUT colour reference
+                        cluts.append(clut)
+                    else:
+                        # when colored faces a single byte is two pixels
+                        id = struct.unpack("B", file.read(1))[0]
+                        cluts.append(id%16)
+                        cluts.append(id // 16)
+            for i in range(0, self.numPallets):
+                pixmap = []
+                for j in range(0, len(cluts)):
+                    if int(cluts[j]) < self.numColor:
+                        pixmap.extend(self.palletColors[i][int(cluts[j])].toFloat())
+                    else:
+                        pixmap.extend(self.palletColors[i][0].toFloat())
+                self.textures.append(pixmap)
+            # we add pallets colors in the first raw (never used in UVs) 
+            # by doing this we make sure all colors are used and ordered
+            i = 0
+            for x in range(0, 2):
+                for y in range(0, self.numColor):
+                    self.textures[x][i] = self.palletColors[x][y].R / 255
+                    self.textures[x][i+1] = self.palletColors[x][y].G / 255
+                    self.textures[x][i+2] = self.palletColors[x][y].B / 255
+                    self.textures[x][i+3] = self.palletColors[x][y].A / 255
+                    i += 4
+                i = 0
+                #print("self.palletColors[x] : "+repr(self.palletColors[x]))
+    def tobin(self):
+        bin = bytes()
+        bin += (struct.pack("I 4B", self.texMapSize, self.unk, self.halfW, self.halfH, self.numColor))
+        for i in range(0, 2):
+            for j in range(0, self.numColor):
                 if i < len(self.palletColors):
                     if j < len(self.palletColors[i]):
                         bin += (struct.pack("H", int(self.palletColors[i][j].to16bits(), 16)))
@@ -882,3 +1189,123 @@ class VSZUDHeader:
         self.idSHP, self.idWEP, self.idWEPType, self.idWEPMat, self.idWEP2, self.idWEP2Mat, self.uk, self.pad = struct.unpack("8B", file.read(8))
         self.ptrSHP, self.lenSHP, self.ptrWEP, self.lenWEP, self.ptrWEP2, self.lenWEP2, self.ptrCSEQ, self.lenCSEQ, self.ptrBSEQ, self.lenBSEQ = struct.unpack("10I", file.read(40))
         print(self)
+
+class VSSHPHeader:
+    def __init__(self):
+        self.numBones = 0
+        self.numGroups = 0 # group of vertices weighted to a bone
+        self.numVertices = 0
+        self.numTri = 0
+        self.numQuad = 0
+        self.numFace = 0 # can be quads or tris or vcolored faces in some SHP
+        self.totalPoly = 0
+        self.overlays = []
+        self.dec = 0 # always the same in WEP files, but not when packed in ZUD
+        self.isVertexColored = False
+        self.bonePtr = 0
+        self.groupPtr = 0
+        self.vertexPtr = 0
+        self.polygonPtr = 0
+        self.texturePtr = 0
+        self.magicPtr = 0
+        self.AKAOPtr = 0
+        self.bones = []
+        self.groups = []
+        self.vertices = []
+        self.faces = []
+        self.tim = VSWEPTIM()
+        self.rotations = []
+        self.unk1 = []
+        self.unk2 = []
+        self.unk3 = []
+        self.collider = []
+        self.menuYpos = 0
+        self.shadowRadius = 0
+        self.shadowInc = 0
+        self.shadowDec = 0
+        self.h1 = 0
+        self.h2 = 0
+        self.menuScale = 0
+        self.h3 = 0
+        self.tSphereYpos = 0
+        self.h4 = 0
+        self.h5 = 0
+        self.h6 = 0
+        self.h7 = 0
+    def __repr__(self):
+        return "(--SHP-- | "+ " numBones : "+repr(self.numBones)+ " numGroups : "+repr(self.numGroups)+ " numTri : "+repr(self.numTri)+ " numQuad : "+repr(self.numQuad)+ " numFace : "+repr(self.numFace) + " bonePtr : "+repr(self.bonePtr)+ " groupPtr : "+repr(self.groupPtr)+ " vertexPtr : "+repr(self.vertexPtr)+ " polygonPtr : "+repr(self.polygonPtr)+ " texturePtr : "+repr(self.texturePtr)+")"
+    def getLastGroupVNum(self):
+        if self.numGroups > 0:
+            return self.groups[self.numGroups-1].numVertices
+        else:
+            return 0
+    def getVerticesForBlender(self):
+        bvertices = []
+        for i in range(0, self.numVertices):
+            vertex = self.vertices[i]
+            bvertices.append(vertex.vector())
+        return bvertices
+    def getFacesForBlender(self):
+        bfaces = []
+        for i in range(0, self.totalPoly):
+            face = self.faces[i]
+            if face.type == 0x24 or face.type == 0x34:
+                bfaces.append(face.vertices)
+            elif face.type == 0x2C or face.type == 0x3C:
+                # little twist for quads 
+                bfaces.append([face.vertices[0], face.vertices[1], face.vertices[3], face.vertices[2]])
+        return bfaces
+    def getUVsForBlender(self):
+        buvs = []
+        for i in range(0, self.totalPoly):
+            face = self.faces[i]
+            if face.type == 0x24 or face.type == 0x34:
+                buvs.extend([face.uv[1], face.uv[2], face.uv[0]])
+            elif face.type == 0x2C or face.type == 0x3C:
+                buvs.extend([face.uv[0], face.uv[1], face.uv[3], face.uv[2]])
+        return buvs
+    def getVColForBlender(self):
+        vcols = []
+        for i in range(0, self.totalPoly):
+            face = self.faces[i]
+            if face.type == 0x24 or face.type == 0x34:
+                vcols.extend([face.colors[0], face.colors[1], face.colors[2]])
+            elif face.type == 0x2C or face.type == 0x3C:
+                vcols.extend([face.colors[0], face.colors[1], face.colors[3], face.colors[2]])
+        return vcols
+    def feed(self, file):
+        self.numBones, self.numGroups, self.numTri, self.numQuad, self.numFace = struct.unpack("2B 3H", file.read(8))
+        self.totalPoly = self.numTri+self.numQuad+self.numFace
+        self.dec = file.tell()
+        self.overlays = []
+        for i in range(0, 8):
+            self.overlays.append(struct.unpack("4b", file.read(4)))
+        self.unk1 = struct.unpack("36b", file.read(36))
+        self.collider = struct.unpack("6b", file.read(6))
+        self.menuYpos = struct.unpack("h", file.read(2))[0]
+        self.unk2 = struct.unpack("12b", file.read(12))
+        self.shadowRadius, self.shadowInc, self.shadowDec, self.h1, self.h2, self.menuScale, self.h3, self.tSphereYpos, self.h4, self.h5, self.h6, self.h7 = struct.unpack("12h", file.read(24))
+        bSeqLBA = []
+        for i in range(0, 0x0C):
+            bSeqLBA.append(struct.unpack("I", file.read(4))[0]) # LBA XX_BTX.SEQ  (battle animations first one is actually XX_COM.SEQ)
+        chains = []
+        for i in range(0, 0x0C):
+            chains.append(struct.unpack("H", file.read(2))[0]) # chain attack animation ID
+        specialAttacksLBA = []
+        for i in range(0, 12):
+            specialAttacksLBA.append(struct.unpack("I", file.read(4))[0])  # LBA XXSP0X.SEQ (special attack animations)	 + unknown (probably more LBA tables, there are also special attack ids stored here.)   
+        self.dec = file.tell()+4
+        self.magicPtr = struct.unpack("I", file.read(4))[0] + self.dec # pointer to magic effects section (relative to offset $F8)
+        self.unk3 = struct.unpack("24H", file.read(48))
+        self.AKAOPtr, self.groupPtr, self.vertexPtr, self.polygonPtr = struct.unpack("4I", file.read(16))
+        self.bonePtr = file.tell()
+        self.AKAOPtr += self.dec
+        self.groupPtr += self.dec
+        self.vertexPtr += self.dec
+        self.polygonPtr += self.dec
+    def tobin(self):
+        bin = bytes()
+        bin += (VS_HEADER) 
+        bin += (struct.pack("2B 3H", self.numBones, self.numGroups, self.numTri, self.numQuad, self.numFace))
+        # TODO 
+        return bin
