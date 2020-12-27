@@ -45,6 +45,6 @@ in Addons window clic install and choose <a href="https://github.com/korobetski/
 
 # Discord :
 
-https://discord.gg/Wtmnkqd5
+https://discord.gg/BRgsK77zkf
 
 <img src="https://github.com/korobetski/blender-vagrant-story/raw/master/uv_map_addon_win.png"/>
