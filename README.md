@@ -14,7 +14,9 @@ The goal of this addon is mainly for modding purpose, use with cautions
 
 For now the only format supported for import and export is *.WEP Weapon Model format
 
-Work in progress SHP import
+Work in progress SHP import, does not contains animations or default T-pose so the output model will be weird
+Work in progress SEQ import, animations informations
+Work in progress ZUD import, SHP + WEP (sometimes with a shield) + SEQ (?common + ?battle)
 
 Maybe more formats in the future...
 
