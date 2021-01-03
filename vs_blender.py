@@ -295,7 +295,8 @@ def loadSHP(operator, context, filepath):
     # EOF
     file.close()
 
-    buildSHPGeometry(shp, bpy.path.display_name_from_filepath(filepath))
+    char = buildSHPGeometry(shp, bpy.path.display_name_from_filepath(filepath))
+
     return {'FINISHED'}
 
 
@@ -391,21 +392,22 @@ def loadZUD(operator, context, filepath):
         chiof.target = char.parent # Armature
         # we must find the bone where mountId = -15 or -16
         chiof.subtarget = shp.getWeaponBoneName()
-        # TODO : childof_clear_inverse
+        bpy.ops.constraint.childof_clear_inverse(constraint=chiof.name, owner='OBJECT')
     if zud.idWEP2 != 0:
         wep_obj = buildWEPGeometry(wep2, "{:02X}".format(zud.idWEP2)+"_ZEP2")
         chiof = wep_obj.constraints.new(type='CHILD_OF')
         chiof.target = char.parent # Armature
         # we must find the bone where mountId = -15 or -16
         chiof.subtarget = shp.getShieldBoneName()
-        # TODO : childof_clear_inverse
-        
-
+        bpy.ops.constraint.childof_clear_inverse(constraint=chiof.name, owner='OBJECT')
     if zud.lenCSEQ > 0:
         buildAnimations(char, cseq)
     if zud.lenBSEQ > 0:
         buildAnimations(char, bseq)
-
+    
+    # selecting armature
+    char.parent.select_set(True)
+    bpy.context.view_layer.objects.active = char.parent
 
     return {'FINISHED'}
 
@@ -600,12 +602,13 @@ def buildSHPGeometry(shp, name):
     edit_bones = armature_data.data.edit_bones
     for vs_bone in shp.bones:
         blender_bone = edit_bones.new(vs_bone.name)
-        #blender_bone.use_relative_parent = True
+        blender_bone.use_relative_parent = True
         blender_bone.use_inherit_rotation = True
-        blender_bone.use_local_location = True
+        blender_bone.use_local_location = False
         if vs_bone.parent is None:
             blender_bone.head = (0, 0, 0)
-            blender_bone.tail = (0.5, 0, 0)
+            #blender_bone.length = 0.5 # by default bones go up in Z+
+            blender_bone.tail = (0, 0.00001, 0) # Blender delete bones when length = 0
         else:
             blender_bone.parent = edit_bones[vs_bone.parent.name]
             if vs_bone.parentIndex != 0:
@@ -613,7 +616,7 @@ def buildSHPGeometry(shp, name):
             else:
                 blender_bone.head = (0, 0, 0)
             blender_bone.tail = (blender_bone.head[0] + vs_bone.length / 100, 0, 0)
-        print("Bone "+repr(vs_bone.index)+" :  -> len : "+repr(blender_bone.head))
+            # bones direction is X-
 
 
     # exit edit mode to save bones so they can be used in pose mode
@@ -625,6 +628,7 @@ def buildSHPGeometry(shp, name):
     blender_obj = bpy.data.objects.new(mesh_name, object_data=blender_mesh)
     blender_mesh.materials.append(mat)
     # Creating vertices groups
+    # https://docs.blender.org/api/current/bpy.types.VertexGroup.html
     lastv = 0
     for vs_group in shp.groups:
         blender_group = blender_obj.vertex_groups.new(name=vs_group.bone.name)
@@ -632,7 +636,8 @@ def buildSHPGeometry(shp, name):
         for i in range(lastv, vs_group.numVertices):
             indexes.append(i)
         lastv = vs_group.numVertices
-        blender_group.add(indexes, 1, "REPLACE")
+        blender_group.add(indexes, 1, "REPLACE") # type (enum in ['REPLACE', 'ADD', 'SUBTRACT'])
+        blender_group.lock_weight = True
 
     view_layer.active_layer_collection.collection.objects.link(blender_obj)
     blender_obj.select_set(True)
@@ -1444,21 +1449,47 @@ class VSAnim:
                     rz = rz +(keyframe[2]*f)
                     bone_rotation = ((rot13toRad(rx), rot13toRad(ry), rot13toRad(rz)))
 
-                    bone.rotation_mode = 'XYZ'
+                    bone.rotation_mode = 'XYZ' 
                     bone.rotation_euler = bone_rotation
                     bone.keyframe_insert(data_path='rotation_euler', frame=t)
 
                     # TODO : this doesn't work well....
 
-                    #qu = mathutils.Quaternion((1.0, 0.0, 0.0), bone_rotation[0])
-                    #qv = mathutils.Quaternion((0.0, 1.0, 0.0), bone_rotation[1])
-                    #qw = mathutils.Quaternion((0.0, 0.0, 1.0), bone_rotation[2])
+                    #qu = mathutils.Quaternion((1.0, 0.0, 0.0), bone_rotation[0]).normalized()
+                    #qv = mathutils.Quaternion((0.0, 1.0, 0.0), bone_rotation[1]).normalized()
+                    #qw = mathutils.Quaternion((0.0, 0.0, 1.0), bone_rotation[2]).normalized()
+                    #qu = quatFromAxisAngle((1.0, 0.0, 0.0), bone_rotation[0])
+                    #qv = quatFromAxisAngle((0.0, 1.0, 0.0), bone_rotation[1])
+                    #qw = quatFromAxisAngle((0.0, 0.0, 1.0), bone_rotation[2])
                     #q = qw @ qv @ qu
-                    #q.negate() # Output date like in Unity
+                    #q.conjugate()
+                    #q.make_compatible(mathutils.Quaternion((0.0, 0.0, 1.0), math.radians(90)))
+                    #q.negate()
                     #q.normalize()
+                    #identity = mathutils.Quaternion()
+                    #q = identity.rotation_difference(q)
+                    
+                    #
+                    #q.normalize()
+
+                    
+                    #bone.rotation_mode = 'XYZ' 
+                    #bone.rotation_euler = q.to_euler()
+                    #bone.keyframe_insert(data_path='rotation_euler', frame=t)
+
                     #bone.rotation_mode = 'QUATERNION'
                     #bone.rotation_quaternion = q
                     #bone.keyframe_insert(data_path='rotation_quaternion', frame=t)
+
+                    #bpy.context.view_layer.update()
+                    
+                    #rot2 = QuatToEuler(q)
+                    #rot = q.to_euler()
+                    #if j == 0:
+                        #print("Anim "+repr(self.index)+" B "+repr(i)+" -> "+repr(q))
+                        #print("Anim "+repr(self.index)+" B "+repr(i)+" -> base : ("+repr(math.degrees(bone_rotation[0]))+", "+repr(math.degrees(bone_rotation[1]))+", "+repr(math.degrees(bone_rotation[2]))+") ")
+                        #print("Anim "+repr(self.index)+" B "+repr(i)+" -> euler : ("+repr(math.degrees(rot[0]))+", "+repr(math.degrees(rot[1]))+", "+repr(math.degrees(rot[2]))+") ")
+                    #print("Anim "+repr(self.index)+" B "+repr(i)+" f "+repr(j)+" -> euler 2 : ("+repr(math.degrees(rot2[0]))+", "+repr(math.degrees(rot2[1]))+", "+repr(math.degrees(rot2[2]))+") ")
                     
                     #bone.rotation_mode = 'XYZ'
                     #bone.rotation_euler = q.to_euler()
@@ -1467,13 +1498,17 @@ class VSAnim:
                     # matrix            : Final 4x4 matrix after constraints and drivers are applied (object space)
                     # matrix_basis      : Alternative access to location/scale/rotation relative to the parent and own rest bone
                     # matrix_channel    : 4x4 matrix, before constraints
-                    #bone.matrix = mathutils.Matrix.Identity(4)
+                    #
                     
                     #q = (q.to_matrix().to_4x4() @ bone.matrix_channel).to_quaternion()        
                     #print("Matrix : "+repr(q.to_matrix()))
                     #print("Matrix local : "+repr(bone.bone.matrix_local))
                     #bone_rot_deg = (math.degrees(bone_rotation[0]), math.degrees(bone_rotation[1]), math.degrees(bone_rotation[2]))
                     #print("Anim "+repr(self.index)+" B "+repr(i)+" f "+repr(j)+" -> Rot : "+repr(bone_rot_deg))
+        #for fcu in arm_obj.animation_data.action.fcurves:
+        #    print(fcu.data_path + " channel " + str(fcu.array_index))
+        #    for keyframe in fcu.keyframe_points:
+        #        print(repr(keyframe.co)) #coordinates x,y
 
 
 class VSWEPTIM:
@@ -1906,3 +1941,33 @@ class VSSEQHeader:
     def tobin(self):
         bin = bytes()
         return bin
+
+def ComputeXAngle(q):
+    sinr_cosp = 2 * (q[0] * q[1] + q[2] * q[3])
+    cosr_cosp = 1 - 2 * (q[1] * q[1] + q[2] * q[2])
+    return math.atan2(sinr_cosp, cosr_cosp)
+
+def ComputeYAngle(q):
+    sinp = 2 * (q[0] * q[2] - q[3] * q[1])
+    if (abs(sinp) >= 1):
+        return math.pi / 2 * math.copysign(1, sinp) # use 90 degrees if out of range
+    else:
+        return math.asin(sinp)
+
+def ComputeZAngle(q):
+    siny_cosp = 2 * (q[0] * q[3] + q[1] * q[2])
+    cosy_cosp = 1 - 2 * (q[2] * q[2] + q[3] * q[3])
+    return math.atan2(siny_cosp, cosy_cosp)
+
+def QuatToEuler(q):
+    return (ComputeXAngle(q), ComputeYAngle(q), ComputeZAngle(q))
+
+def quatFromAxisAngle(axis, angle):
+	halfAngle = angle / 2
+	s = math.sin( halfAngle )
+	_x = axis[0] * s
+	_y = axis[1] * s
+	_z = axis[2] * s
+	_w = math.cos( halfAngle )
+	q = mathutils.Quaternion((_w, _x, _y, _z)).normalized()
+	return q
