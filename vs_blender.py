@@ -602,9 +602,9 @@ def buildSHPGeometry(shp, name):
     edit_bones = armature_data.data.edit_bones
     for vs_bone in shp.bones:
         blender_bone = edit_bones.new(vs_bone.name)
-        blender_bone.use_relative_parent = True
+        blender_bone.use_relative_parent = False
         blender_bone.use_inherit_rotation = True
-        blender_bone.use_local_location = False
+        blender_bone.use_local_location = True
         if vs_bone.parent is None:
             blender_bone.head = (0, 0, 0)
             #blender_bone.length = 0.5 # by default bones go up in Z+
@@ -612,10 +612,12 @@ def buildSHPGeometry(shp, name):
         else:
             blender_bone.parent = edit_bones[vs_bone.parent.name]
             if vs_bone.parentIndex != 0:
-                blender_bone.head = blender_bone.parent.tail
+                #blender_bone.head = blender_bone.parent.tail
+                blender_bone.head = (blender_bone.parent.head[0] + vs_bone.parent.length / 100, 0, 0)
             else:
                 blender_bone.head = (0, 0, 0)
-            blender_bone.tail = (blender_bone.head[0] + vs_bone.length / 100, 0, 0)
+            #blender_bone.tail = (blender_bone.head[0] + vs_bone.length / 100, 0, 0)
+            blender_bone.tail = (blender_bone.head[0], 0.00001, 0)
             # bones direction is X-
 
 
@@ -666,8 +668,8 @@ def buildSHPGeometry(shp, name):
 
 
 def buildAnimations(shp, seq):
-    #for i in range(0, seq.numAnimations):
-    for i in range(0, 1): # no need more since the output isn't good
+    for i in range(0, seq.numAnimations):
+    #for i in range(0, 1): # no need more since the output isn't good
         anim = seq.animations[i]
         anim.build(shp)
 
