@@ -120,19 +120,14 @@ class ExportWEP(bpy.types.Operator, ExportHelper):
 
 
 def menu_func_import(self, context):
-    self.layout.operator(ImportWEP.bl_idname,
-                         text="Vagrant Story Weapon (.WEP)")
-    self.layout.operator(ImportSHP.bl_idname,
-                         text="Vagrant Story Character Shape (.SHP)")
-    self.layout.operator(ImportSEQ.bl_idname,
-                         text="Vagrant Story Animations Sequence (.SEQ)")
-    self.layout.operator(ImportZUD.bl_idname,
-                         text="Vagrant Story Zone Unit Datas (.ZUD)")
+    self.layout.operator(ImportWEP.bl_idname, text="Vagrant Story Weapon (.WEP)")
+    self.layout.operator(ImportSHP.bl_idname, text="Vagrant Story Character Shape (.SHP)")
+    self.layout.operator(ImportSEQ.bl_idname, text="Vagrant Story Animations Sequence (.SEQ)")
+    self.layout.operator(ImportZUD.bl_idname, text="Vagrant Story Zone Unit Datas (.ZUD)")
 
 
 def menu_func_export(self, context):
-    self.layout.operator(ExportWEP.bl_idname,
-                         text="Vagrant Story Weapon (.WEP)")
+    self.layout.operator(ExportWEP.bl_idname, text="Vagrant Story Weapon (.WEP)")
 
 
 classes = (
@@ -353,6 +348,7 @@ def parseSHP(file):
 
 def loadZUD(operator, context, filepath):
     file = open(filepath, "rb")
+    zud_id = bpy.path.display_name_from_filepath(filepath)
     zud = VSZUDHeader()
     zud.feed(file)
     print(zud)
@@ -374,12 +370,12 @@ def loadZUD(operator, context, filepath):
     # COMMON SEQ SECTION
     if zud.lenCSEQ > 0:
         file.seek(zud.ptrCSEQ)
-        cseq = parseSEQ(file)
+        cseq = parseSEQ(file, zud_id+"_Com")
 
     # BATTLE SEQ SECTION
     if zud.lenBSEQ > 0:
         file.seek(zud.ptrBSEQ)
-        bseq = parseSEQ(file)
+        bseq = parseSEQ(file, zud_id+"_Bat")
 
     # EOF
     file.close()
@@ -390,24 +386,30 @@ def loadZUD(operator, context, filepath):
         wep_obj = buildWEPGeometry(wep, "{:02X}".format(zud.idWEP)+"_ZWEP")
         chiof = wep_obj.constraints.new(type='CHILD_OF')
         chiof.target = char.parent # Armature
-        # we must find the bone where mountId = -15 or -16
         chiof.subtarget = shp.getWeaponBoneName()
         bpy.ops.constraint.childof_clear_inverse(constraint=chiof.name, owner='OBJECT')
     if zud.idWEP2 != 0:
         wep_obj = buildWEPGeometry(wep2, "{:02X}".format(zud.idWEP2)+"_ZEP2")
         chiof = wep_obj.constraints.new(type='CHILD_OF')
         chiof.target = char.parent # Armature
-        # we must find the bone where mountId = -15 or -16
         chiof.subtarget = shp.getShieldBoneName()
         bpy.ops.constraint.childof_clear_inverse(constraint=chiof.name, owner='OBJECT')
+    
     if zud.lenCSEQ > 0:
         buildAnimations(char, cseq)
     if zud.lenBSEQ > 0:
         buildAnimations(char, bseq)
     
     # selecting armature
+    char.parent.name = zud_id
     char.parent.select_set(True)
     bpy.context.view_layer.objects.active = char.parent
+
+    char.parent.rotation_euler = (-math.pi/2, 0, math.pi) # height to Z+ axis and forward to Y+
+    if zud.lenCSEQ > 0:
+        char.parent.animation_data.action = bpy.data.actions[cseq.name+"_Animation_0"]
+    if zud.lenBSEQ > 0:
+        char.parent.animation_data.action = bpy.data.actions[bseq.name+"_Animation_0"]
 
     return {'FINISHED'}
 
@@ -419,8 +421,9 @@ def loadSEQ(operator, context, filepath):
     file.close()
 
 
-def parseSEQ(file):
+def parseSEQ(file, name = "SEQ"):
     seq = VSSEQHeader()
+    seq.name = name
     seq.feed(file)
     
     seq.animations = []
@@ -447,7 +450,7 @@ def parseBoneSection(file, mesh):
         # in theory parent bone are defined before
         if bone.parentIndex < mesh.numBones:
             bone.parent = mesh.bones[bone.parentIndex]
-        print(bone)
+        #print(bone)
         mesh.bones.append(bone)
 
 
@@ -457,6 +460,7 @@ def parseGroupSection(file, mesh):
         group = VSGroup()
         group.feed(file, i)
         group.bone = mesh.bones[group.boneIndex]
+        group.bone.group = group # double reference
         #print(group)
         mesh.groups.append(group)
 
@@ -473,10 +477,8 @@ def parseVertexSection(file, mesh):
         vertex.group = mesh.groups[g]
         vertex.bone = vertex.group.bone
         vertex.feed(file, i)
-        vertex.reverse()
+        #vertex.reverse()
         #print(vertex)
-        # easy trick to weight vertices without armature
-        # but WEP will need bones for Export mode i supose so maybe we'll should make bones in all case
         vertex.x += vertex.bone.decalage()
         mesh.vertices.append(vertex)
 
@@ -605,20 +607,27 @@ def buildSHPGeometry(shp, name):
         blender_bone.use_relative_parent = False
         blender_bone.use_inherit_rotation = True
         blender_bone.use_local_location = True
+        #matrix = mathutils.Matrix.Identity(4)
         if vs_bone.parent is None:
             blender_bone.head = (0, 0, 0)
             #blender_bone.length = 0.5 # by default bones go up in Z+
             blender_bone.tail = (0, 0.00001, 0) # Blender delete bones when length = 0
         else:
             blender_bone.parent = edit_bones[vs_bone.parent.name]
+            #matrix[0][3] = blender_bone.parent.head[0] + vs_bone.parent.length / 100
+            #print("Bone "+repr(vs_bone)+" -> id : "+repr(blender_bone.matrix))
             if vs_bone.parentIndex != 0:
                 #blender_bone.head = blender_bone.parent.tail
                 blender_bone.head = (blender_bone.parent.head[0] + vs_bone.parent.length / 100, 0, 0)
             else:
                 blender_bone.head = (0, 0, 0)
+            # bones direction should be X+
+            # but VS animations seems good when bones go forward in Y+
+            # this is because Blender change the bone matrix when the bone.tail is defined
+            # so if we want render bones in the good axis we need to "rotate" by Z-90° all animations keyframe in bone "normal / local mode"
             #blender_bone.tail = (blender_bone.head[0] + vs_bone.length / 100, 0, 0)
-            blender_bone.tail = (blender_bone.head[0], 0.00001, 0)
-            # bones direction is X-
+            blender_bone.tail = (blender_bone.head[0], vs_bone.length / 1000, 0)
+            
 
 
     # exit edit mode to save bones so they can be used in pose mode
@@ -669,9 +678,8 @@ def buildSHPGeometry(shp, name):
 
 def buildAnimations(shp, seq):
     for i in range(0, seq.numAnimations):
-    #for i in range(0, 1): # no need more since the output isn't good
         anim = seq.animations[i]
-        anim.build(shp)
+        anim.build(shp, seq.name+"_Animation_"+repr(i))
 
 
 def rot13toRad(angle):
@@ -970,6 +978,7 @@ class VSBone:
         self.parent = None
         self.parentIndex = -1
         self.parentName = None
+        self.group = None
         self.groupId = 0
         self.mountId = 0
         self.bodyPartId = 0
@@ -995,6 +1004,7 @@ class VSBone:
         self.length, self.parentIndex, self.groupId, self.mountId, self.bodyPartId, self.mode = struct.unpack(
             "i 5b", file.read(9))
         self.unk = struct.unpack("7B", file.read(7))
+        self.length = -self.length # positive length
 
     def decalage(self):
         if self.parent != None:
@@ -1416,10 +1426,10 @@ class VSAnim:
 
             if (self.scaleFlags & 0x2):
                 self.scaleKeysPerBone[i] = self.readKeys(file)
-    def build(self, blender_obj):
+    def build(self, blender_obj, anim_name):
         arm_obj = blender_obj.parent
         arm_obj.animation_data_create()
-        arm_obj.animation_data.action = bpy.data.actions.new(name="VS_Animation_"+repr(self.index))
+        arm_obj.animation_data.action = bpy.data.actions.new(name=anim_name)
         for i in range(0, self.numBones):
             bone = arm_obj.pose.bones["bone_"+repr(i)]
             if i < len(self.rotationKeysPerBone):
@@ -1444,73 +1454,25 @@ class VSAnim:
 
                     if keyframe[2] == None:
                         keyframe[2] = keyframes[j-1][2]
-
                     
                     rx = rx +(keyframe[0]*f)
                     ry = ry +(keyframe[1]*f)
                     rz = rz +(keyframe[2]*f)
                     bone_rotation = ((rot13toRad(rx), rot13toRad(ry), rot13toRad(rz)))
 
-                    bone.rotation_mode = 'XYZ' 
-                    bone.rotation_euler = bone_rotation
-                    bone.keyframe_insert(data_path='rotation_euler', frame=t)
-
-                    # TODO : this doesn't work well....
-
-                    #qu = mathutils.Quaternion((1.0, 0.0, 0.0), bone_rotation[0]).normalized()
-                    #qv = mathutils.Quaternion((0.0, 1.0, 0.0), bone_rotation[1]).normalized()
-                    #qw = mathutils.Quaternion((0.0, 0.0, 1.0), bone_rotation[2]).normalized()
-                    #qu = quatFromAxisAngle((1.0, 0.0, 0.0), bone_rotation[0])
-                    #qv = quatFromAxisAngle((0.0, 1.0, 0.0), bone_rotation[1])
-                    #qw = quatFromAxisAngle((0.0, 0.0, 1.0), bone_rotation[2])
-                    #q = qw @ qv @ qu
-                    #q.conjugate()
-                    #q.make_compatible(mathutils.Quaternion((0.0, 0.0, 1.0), math.radians(90)))
-                    #q.negate()
-                    #q.normalize()
-                    #identity = mathutils.Quaternion()
-                    #q = identity.rotation_difference(q)
-                    
-                    #
-                    #q.normalize()
-
-                    
+                    # euler rotations isn't good enough for animations interpolations so we build Quaternions
                     #bone.rotation_mode = 'XYZ' 
-                    #bone.rotation_euler = q.to_euler()
+                    #bone.rotation_euler = bone_rotation
                     #bone.keyframe_insert(data_path='rotation_euler', frame=t)
 
-                    #bone.rotation_mode = 'QUATERNION'
-                    #bone.rotation_quaternion = q
-                    #bone.keyframe_insert(data_path='rotation_quaternion', frame=t)
-
-                    #bpy.context.view_layer.update()
+                    qu = mathutils.Quaternion((1.0, 0.0, 0.0), bone_rotation[0])
+                    qv = mathutils.Quaternion((0.0, 1.0, 0.0), bone_rotation[1])
+                    qw = mathutils.Quaternion((0.0, 0.0, 1.0), bone_rotation[2])
+                    q = qw @ qv @ qu
                     
-                    #rot2 = QuatToEuler(q)
-                    #rot = q.to_euler()
-                    #if j == 0:
-                        #print("Anim "+repr(self.index)+" B "+repr(i)+" -> "+repr(q))
-                        #print("Anim "+repr(self.index)+" B "+repr(i)+" -> base : ("+repr(math.degrees(bone_rotation[0]))+", "+repr(math.degrees(bone_rotation[1]))+", "+repr(math.degrees(bone_rotation[2]))+") ")
-                        #print("Anim "+repr(self.index)+" B "+repr(i)+" -> euler : ("+repr(math.degrees(rot[0]))+", "+repr(math.degrees(rot[1]))+", "+repr(math.degrees(rot[2]))+") ")
-                    #print("Anim "+repr(self.index)+" B "+repr(i)+" f "+repr(j)+" -> euler 2 : ("+repr(math.degrees(rot2[0]))+", "+repr(math.degrees(rot2[1]))+", "+repr(math.degrees(rot2[2]))+") ")
-                    
-                    #bone.rotation_mode = 'XYZ'
-                    #bone.rotation_euler = q.to_euler()
-                    #bone.keyframe_insert(data_path='rotation_euler', frame=t)
-
-                    # matrix            : Final 4x4 matrix after constraints and drivers are applied (object space)
-                    # matrix_basis      : Alternative access to location/scale/rotation relative to the parent and own rest bone
-                    # matrix_channel    : 4x4 matrix, before constraints
-                    #
-                    
-                    #q = (q.to_matrix().to_4x4() @ bone.matrix_channel).to_quaternion()        
-                    #print("Matrix : "+repr(q.to_matrix()))
-                    #print("Matrix local : "+repr(bone.bone.matrix_local))
-                    #bone_rot_deg = (math.degrees(bone_rotation[0]), math.degrees(bone_rotation[1]), math.degrees(bone_rotation[2]))
-                    #print("Anim "+repr(self.index)+" B "+repr(i)+" f "+repr(j)+" -> Rot : "+repr(bone_rot_deg))
-        #for fcu in arm_obj.animation_data.action.fcurves:
-        #    print(fcu.data_path + " channel " + str(fcu.array_index))
-        #    for keyframe in fcu.keyframe_points:
-        #        print(repr(keyframe.co)) #coordinates x,y
+                    bone.rotation_mode = 'QUATERNION'
+                    bone.rotation_quaternion = q
+                    bone.keyframe_insert(data_path='rotation_quaternion', frame=t)
 
 
 class VSWEPTIM:
@@ -1643,8 +1605,7 @@ class VSSHPTIM:
         return "(TIM : "+" texMapSize = "+repr(self.texMapSize)+" unk = "+repr(self.unk)+" halfW = "+repr(self.halfW)+" halfH = "+repr(self.halfH)+" numColor = "+repr(self.numColor)+")"
 
     def feed(self, file):
-        self.texMapSize, self.unk, self.halfW, self.halfH, self.numColor = struct.unpack(
-            "I 4B", file.read(8))
+        self.texMapSize, self.unk, self.halfW, self.halfH, self.numColor = struct.unpack("I 4B", file.read(8))
         self.textureWidth = self.halfW * 2
         self.textureHeigth = self.halfH * 2
         self.textures = []
@@ -1662,8 +1623,7 @@ class VSSHPTIM:
             for x in range(0, self.textureWidth):
                 for y in range(0, self.textureHeigth):
                     if self.doubleClut == False:
-                        clut = struct.unpack("B", file.read(1))[
-                            0]  # CLUT colour reference
+                        clut = struct.unpack("B", file.read(1))[0]  # CLUT colour reference
                         cluts.append(clut)
                     else:
                         # when colored faces a single byte is two pixels
@@ -1674,25 +1634,13 @@ class VSSHPTIM:
                 pixmap = []
                 for j in range(0, len(cluts)):
                     if int(cluts[j]) < self.numColor:
-                        pixmap.extend(
-                            self.palletColors[i][int(cluts[j])].toFloat())
+                        pixmap.extend(self.palletColors[i][int(cluts[j])].toFloat())
                     else:
                         pixmap.extend(self.palletColors[i][0].toFloat())
-                self.textures.append(pixmap)
-            # we add pallets colors in the first raw (never used in UVs)
-            # by doing this we make sure all colors are used and ordered
-            i = 0
-            for x in range(0, 2):
-                for y in range(0, self.numColor):
-                    self.textures[x][i] = self.palletColors[x][y].R / 255
-                    self.textures[x][i+1] = self.palletColors[x][y].G / 255
-                    self.textures[x][i+2] = self.palletColors[x][y].B / 255
-                    self.textures[x][i+3] = self.palletColors[x][y].A / 255
-                    i += 4
-                i = 0
-                #print("self.palletColors[x] : "+repr(self.palletColors[x]))
+                self.textures.append(pixmap)   
         if self.doubleClut == True:  # when colored faces we must multiply by 4
             self.textureWidth = self.halfW * 4
+        # TODO : inverse textures and UVs 
 
     def tobin(self):
         bin = bytes()
@@ -1702,8 +1650,7 @@ class VSSHPTIM:
             for j in range(0, self.numColor):
                 if i < len(self.palletColors):
                     if j < len(self.palletColors[i]):
-                        bin += (struct.pack("H",
-                                            int(self.palletColors[i][j].to16bits(), 16)))
+                        bin += (struct.pack("H", int(self.palletColors[i][j].to16bits(), 16)))
                     else:
                         bin += (struct.pack("H", 65535))
                 else:
@@ -1853,13 +1800,13 @@ class VSSHPHeader:
     
     def getWeaponBoneName(self):
         for bone in self.bones:
-            if bone.mountId == -15:
+            if bone.mountId == -16:
                 return bone.name
         return None
 
     def getShieldBoneName(self):
         for bone in self.bones:
-            if bone.mountId == -16:
+            if bone.mountId == -15:
                 return bone.name
         return None
 
@@ -1913,6 +1860,7 @@ class VSSHPHeader:
 
 class VSSEQHeader:
     def __init__(self):
+        self.name = "SEQ"
         self.numSlots = 0
         self.numBones = 0
         self.size = 0
@@ -1943,33 +1891,3 @@ class VSSEQHeader:
     def tobin(self):
         bin = bytes()
         return bin
-
-def ComputeXAngle(q):
-    sinr_cosp = 2 * (q[0] * q[1] + q[2] * q[3])
-    cosr_cosp = 1 - 2 * (q[1] * q[1] + q[2] * q[2])
-    return math.atan2(sinr_cosp, cosr_cosp)
-
-def ComputeYAngle(q):
-    sinp = 2 * (q[0] * q[2] - q[3] * q[1])
-    if (abs(sinp) >= 1):
-        return math.pi / 2 * math.copysign(1, sinp) # use 90 degrees if out of range
-    else:
-        return math.asin(sinp)
-
-def ComputeZAngle(q):
-    siny_cosp = 2 * (q[0] * q[3] + q[1] * q[2])
-    cosy_cosp = 1 - 2 * (q[2] * q[2] + q[3] * q[3])
-    return math.atan2(siny_cosp, cosy_cosp)
-
-def QuatToEuler(q):
-    return (ComputeXAngle(q), ComputeYAngle(q), ComputeZAngle(q))
-
-def quatFromAxisAngle(axis, angle):
-	halfAngle = angle / 2
-	s = math.sin( halfAngle )
-	_x = axis[0] * s
-	_y = axis[1] * s
-	_z = axis[2] * s
-	_w = math.cos( halfAngle )
-	q = mathutils.Quaternion((_w, _x, _y, _z)).normalized()
-	return q

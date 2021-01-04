@@ -4,7 +4,7 @@ Blender addon for importing / exporting Vagrant Story (Squaresoft 2000) file for
 
 Vagrant Story files formats are mostly explained here : http://datacrystal.romhacking.net/wiki/Vagrant_Story:File_formats
 
-<img src="https://github.com/korobetski/blender-vagrant-story/raw/master/export.png"/>
+<img src="https://github.com/korobetski/blender-vagrant-story/raw/master/zud_anim.png"/>
 
 # Purpose :
 
@@ -16,7 +16,7 @@ For now the only format supported for import and export is *.WEP Weapon Model fo
 
 Work in progress SHP import, does not contains animations or default T-pose so the output model will be weird
 Work in progress SEQ import, animations informations
-Work in progress ZUD import, SHP + WEP (sometimes with a shield) + SEQ (?common + ?battle)
+Work in progress ZUD import, SHP + WEP (sometimes with a shield) + SEQ (common + battle)
 
 Maybe more formats in the future...
 
@@ -49,4 +49,7 @@ in Addons window clic install and choose <a href="https://github.com/korobetski/
 
 https://discord.gg/BRgsK77zkf
 
+<img src="https://github.com/korobetski/blender-vagrant-story/raw/master/export.png"/>
+
 <img src="https://github.com/korobetski/blender-vagrant-story/raw/master/uv_map_addon_win.png"/>
+
