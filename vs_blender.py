@@ -18,7 +18,7 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (1, 2),
+    "version": (1, 3),
     "blender": (2, 91, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
@@ -121,8 +121,8 @@ class ExportWEP(bpy.types.Operator, ExportHelper):
 
 def menu_func_import(self, context):
     self.layout.operator(ImportWEP.bl_idname, text="Vagrant Story Weapon (.WEP)")
-    self.layout.operator(ImportSHP.bl_idname, text="Vagrant Story Character Shape (.SHP)")
-    self.layout.operator(ImportSEQ.bl_idname, text="Vagrant Story Animations Sequence (.SEQ)")
+    #self.layout.operator(ImportSHP.bl_idname, text="Vagrant Story Character Shape (.SHP)")
+    #self.layout.operator(ImportSEQ.bl_idname, text="Vagrant Story Animations Sequence (.SEQ)")
     self.layout.operator(ImportZUD.bl_idname, text="Vagrant Story Zone Unit Datas (.ZUD)")
 
 
@@ -233,8 +233,7 @@ def parseWEP(file, filename):
     if staves.__contains__(filename):
         # its a staff, so we need to correct vertices of the first group
         for i in range(wep.groups[0].numVertices):
-            wep.vertices[i].x = wep.groups[0].bone.length * \
-                2 - wep.vertices[i].x  # its work but why ?
+            wep.vertices[i].x = wep.groups[0].bone.length * 2 - wep.vertices[i].x  # its work but why ?
             wep.vertices[i].y = -wep.vertices[i].y  # simple invert
 
     # WEP FACES SECTION
@@ -251,15 +250,31 @@ def parseWEP(file, filename):
 
     parseTextureSection(file, wep)
 
-    # Default Rotation
-    for i in range(0, 3):  # 3 axis
-        u1, angle, u3, u4 = struct.unpack(">4h", file.read(8))
-        angle = angle / 2
-        print("u1 : "+repr(u1)+"  angle : "+repr(angle) +
-              "  u3 : "+repr(u3)+"  u4 : "+repr(u4))
-
-        wep.rotations.append([u1, angle, u3, u4])
-    
+    # Rotations
+    # in 3C.WEP (Lich staff)
+    # 0000000000000700
+    # 0000FF0F00000700 -> 820F ?= 180°
+    # 0000000000080700
+    # in 53.WEP (arbalette)
+    # 0000000000000700
+    # 0000000000000700
+    # 00000000820F0700 -> 820F ?= 90°
+    # in 69.WEP (round shield)
+    # 0000000000000700
+    # 0000FF0F00000700
+    # 00000000000C0700
+    # the first row is always 0000000000000700 for all 127 .WEP files
+    for i in range(0, 3):  # 3 axis ? 3 bones ?
+        # tested in game on Z048U26.ZUD
+        # default u2 is FF0F it can be -> -241
+        # with u2 = FFC3 (-61 = 180-241) the weapon seems to rotate 90° (or maybe a multiple)
+        # with u2 = 0077 (119 = 360-241) the weapon seems to rotate 180°(or maybe a multiple)
+        # so one unit is maybe 0.5°
+        # considering unknown values, it can also be a Quaternion or a rotation Matrix
+        # https://discord.com/channels/636629277173088256/636629277705633853/792008601563693096 
+        u1, u2, u3, u4 = struct.unpack("<4h", file.read(8))
+        print("u1 : "+repr(u1)+"  u2 : "+repr(u2) +  "  u3 : "+repr(u3)+"  u4 : "+repr(u4))
+        wep.rotations.append([u1, u2, u3, u4])
     return wep
 
 
@@ -405,7 +420,8 @@ def loadZUD(operator, context, filepath):
     char.parent.select_set(True)
     bpy.context.view_layer.objects.active = char.parent
 
-    char.parent.rotation_euler = (-math.pi/2, 0, math.pi) # height to Z+ axis and forward to Y+
+    # maybe we should considere invert Y and Z axis when building bones and vertices
+    char.parent.rotation_euler = (-math.pi/2, 0, 0) # height to Z+
     if zud.lenCSEQ > 0:
         char.parent.animation_data.action = bpy.data.actions[cseq.name+"_Animation_0"]
     if zud.lenBSEQ > 0:
@@ -450,7 +466,7 @@ def parseBoneSection(file, mesh):
         # in theory parent bone are defined before
         if bone.parentIndex < mesh.numBones:
             bone.parent = mesh.bones[bone.parentIndex]
-        #print(bone)
+        print(bone)
         mesh.bones.append(bone)
 
 
@@ -549,9 +565,10 @@ def buildWEPGeometry(wep, name):
     view_layer = bpy.context.view_layer
     view_layer.active_layer_collection.collection.objects.link(blender_obj)
     blender_obj.select_set(True)
+
     # maybe axis arn't the same in VS and Blender, we should care
-    blender_obj.rotation_euler = (math.radians(wep.rotations[0][1]), math.radians(
-        wep.rotations[1][1]), math.radians(wep.rotations[2][1]))
+    # blender_obj.rotation_euler = (math.radians(wep.rotations[0][1]), math.radians( wep.rotations[1][1]), math.radians(wep.rotations[2][1]))
+
     view_layer.objects.active = blender_obj
     blender_mesh.validate()
     blender_mesh.update()
@@ -576,21 +593,19 @@ def buildSHPGeometry(shp, name):
         if i == 0:
             if shp.isVertexColored == True:
                 vc = mat.node_tree.nodes.new('ShaderNodeVertexColor')
+                # https://docs.blender.org/manual/fr/2.91/render/shader_nodes/color/mix.html
                 mix = mat.node_tree.nodes.new('ShaderNodeMixRGB')
-                mat.node_tree.links.new(mix.inputs[1], vc.outputs["Color"])
-                mat.node_tree.links.new(
-                    mix.inputs[2], texImage.outputs["Color"])
-                mat.node_tree.links.new(
-                    bsdf.inputs['Base Color'], mix.outputs['Color'])
+                mix.blend_type = "MULTIPLY" # ('MIX', 'DARKEN', 'MULTIPLY', 'BURN', 'LIGHTEN', 'SCREEN', 'DODGE', 'ADD', 'OVERLAY', 'SOFT_LIGHT', 'LINEAR_LIGHT', 'DIFFERENCE', 'SUBTRACT', 'DIVIDE', 'HUE', 'SATURATION', 'COLOR', 'VALUE')
+                mix.inputs[0].default_value = 1
+                mat.node_tree.links.new( mix.inputs[1], vc.outputs["Color"])
+                mat.node_tree.links.new( mix.inputs[2], texImage.outputs["Color"])
+                mat.node_tree.links.new( bsdf.inputs['Base Color'], mix.outputs['Color'])
                 # to handle alpha cutout
-                mat.node_tree.links.new(
-                    bsdf.inputs['Alpha'], texImage.outputs['Alpha'])
+                mat.node_tree.links.new(bsdf.inputs['Alpha'], texImage.outputs['Alpha'])
             else:
-                mat.node_tree.links.new(
-                    bsdf.inputs['Base Color'], texImage.outputs['Color'])
+                mat.node_tree.links.new( bsdf.inputs['Base Color'], texImage.outputs['Color'])
                 # to handle alpha cutout
-                mat.node_tree.links.new(
-                    bsdf.inputs['Alpha'], texImage.outputs['Alpha'])
+                mat.node_tree.links.new( bsdf.inputs['Alpha'], texImage.outputs['Alpha'])
 
     view_layer = bpy.context.view_layer
     # Creating Bones for Blender
@@ -637,6 +652,8 @@ def buildSHPGeometry(shp, name):
     blender_mesh = bpy.data.meshes.new(name=mesh_name+"_MESH")
     blender_mesh.from_pydata(shp.getVerticesForBlender(), [], shp.getFacesForBlender())
     blender_obj = bpy.data.objects.new(mesh_name, object_data=blender_mesh)
+    
+
     blender_mesh.materials.append(mat)
     # Creating vertices groups
     # https://docs.blender.org/api/current/bpy.types.VertexGroup.html
@@ -666,12 +683,18 @@ def buildSHPGeometry(shp, name):
     for face in blender_mesh.polygons:
         for vert_idx, loop_idx in zip(face.vertices, face.loop_indices):
             # uvs needs to be scaled from texture W&H
-            uvlayer.data[loop_idx].uv = (face_uvs[loop_idx][0]/(
-                shp.tim.textureWidth - 1), face_uvs[loop_idx][1]/(shp.tim.textureHeigth - 1))
+            uvlayer.data[loop_idx].uv = ( face_uvs[loop_idx][0]/(shp.tim.textureWidth - 1), face_uvs[loop_idx][1]/(shp.tim.textureHeigth - 1) )
             vcol_layer.data[loop_idx].color = colors[loop_idx].toFloat()
 
     blender_mesh.validate()
     blender_mesh.update()
+
+    # compute normals outside
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    # face smooth
+    bpy.ops.object.shade_smooth()
     
     return blender_obj
 
