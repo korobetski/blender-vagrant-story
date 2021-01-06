@@ -251,28 +251,17 @@ def parseWEP(file, filename):
     parseTextureSection(file, wep)
 
     # Rotations
-    # in 3C.WEP (Lich staff)
-    # 0000000000000700
-    # 0000FF0F00000700 -> 820F ?= 180°
-    # 0000000000080700
-    # in 53.WEP (arbalette)
-    # 0000000000000700
-    # 0000000000000700
-    # 00000000820F0700 -> 820F ?= 90°
-    # in 69.WEP (round shield)
-    # 0000000000000700
-    # 0000FF0F00000700
-    # 00000000000C0700
-    # the first row is always 0000000000000700 for all 127 .WEP files
+    # the first row is always 0000000000000700 for all 127 .WEP files change values doesn't have a visual effect in game
+    # the second row seems to control rotations, the last value 0x0700 doesn't have a visual effect in game (the last value is always 0x0700 every WEP every row)
     for i in range(0, 3):  # 3 axis ? 3 bones ?
         # tested in game on Z048U26.ZUD
-        # default u2 is FF0F it can be -> -241
-        # with u2 = FFC3 (-61 = 180-241) the weapon seems to rotate 90° (or maybe a multiple)
-        # with u2 = 0077 (119 = 360-241) the weapon seems to rotate 180°(or maybe a multiple)
-        # so one unit is maybe 0.5°
-        # considering unknown values, it can also be a Quaternion or a rotation Matrix
-        # https://discord.com/channels/636629277173088256/636629277705633853/792008601563693096 
+        # default u2 is FF0F it can be ? 4095 i don't think its 65295
+        # with u2 = FFC3 the weapon seems to rotate 90° (or maybe a multiple)
+        # with u2 = 0077 the weapon seems to rotate 180°(or maybe a multiple)
         u1, u2, u3, u4 = struct.unpack("<4h", file.read(8))
+        u1 = u1 / 22.75
+        u2 = u2 / 22.75
+        u3 = u3 / 22.75
         print("u1 : "+repr(u1)+"  u2 : "+repr(u2) +  "  u3 : "+repr(u3)+"  u4 : "+repr(u4))
         wep.rotations.append([u1, u2, u3, u4])
     return wep
@@ -368,6 +357,7 @@ def loadZUD(operator, context, filepath):
     zud.feed(file)
     print(zud)
 
+
     # SHP SECTION
     file.seek(zud.ptrSHP)
     shp = parseSHP(file)
@@ -403,6 +393,10 @@ def loadZUD(operator, context, filepath):
         chiof.target = char.parent # Armature
         chiof.subtarget = shp.getWeaponBoneName()
         bpy.ops.constraint.childof_clear_inverse(constraint=chiof.name, owner='OBJECT')
+        if zud.idWEPType == 6:
+            # if its a staff
+            wep_obj.location = (2.8, 0, 0) # arbitrary value but seems not bad
+
     if zud.idWEP2 != 0:
         wep_obj = buildWEPGeometry(wep2, "{:02X}".format(zud.idWEP2)+"_ZEP2")
         chiof = wep_obj.constraints.new(type='CHILD_OF')
@@ -567,7 +561,7 @@ def buildWEPGeometry(wep, name):
     blender_obj.select_set(True)
 
     # maybe axis arn't the same in VS and Blender, we should care
-    # blender_obj.rotation_euler = (math.radians(wep.rotations[0][1]), math.radians( wep.rotations[1][1]), math.radians(wep.rotations[2][1]))
+    blender_obj.rotation_euler = (math.radians(wep.rotations[1][0]), math.radians( wep.rotations[1][1]), math.radians(wep.rotations[1][2]))
 
     view_layer.objects.active = blender_obj
     blender_mesh.validate()
@@ -1090,6 +1084,12 @@ class VSVertex:
         self.x = -self.x
         self.y = -self.y
         self.z = -self.z
+
+    def swapYZ(self):
+        _y = self.y
+        _z = self.z
+        self.y = _z
+        self.z = _y
 
     def vector(self):
         return (self.x/100, self.y/100, self.z/100)
@@ -1835,8 +1835,7 @@ class VSSHPHeader:
 
 
     def feed(self, file):
-        self.numBones, self.numGroups, self.numTri, self.numQuad, self.numFace = struct.unpack(
-            "2B 3H", file.read(8))
+        self.numBones, self.numGroups, self.numTri, self.numQuad, self.numFace = struct.unpack("2B 3H", file.read(8))
         self.totalPoly = self.numTri+self.numQuad+self.numFace
         self.dec = file.tell()
         self.overlays = []
@@ -1846,16 +1845,14 @@ class VSSHPHeader:
         self.collider = struct.unpack("6b", file.read(6))
         self.menuYpos = struct.unpack("h", file.read(2))[0]
         self.unk2 = struct.unpack("12b", file.read(12))
-        self.shadowRadius, self.shadowInc, self.shadowDec, self.h1, self.h2, self.menuScale, self.h3, self.tSphereYpos, self.h4, self.h5, self.h6, self.h7 = struct.unpack(
-            "12h", file.read(24))
+        self.shadowRadius, self.shadowInc, self.shadowDec, self.h1, self.h2, self.menuScale, self.h3, self.tSphereYpos, self.h4, self.h5, self.h6, self.h7 = struct.unpack("12h", file.read(24))
         bSeqLBA = []
         for i in range(0, 0x0C):
             # LBA XX_BTX.SEQ  (battle animations first one is actually XX_COM.SEQ)
             bSeqLBA.append(struct.unpack("I", file.read(4))[0])
         chains = []
         for i in range(0, 0x0C):
-            chains.append(struct.unpack("H", file.read(2))
-                          [0])  # chain attack animation ID
+            chains.append(struct.unpack("H", file.read(2))[0])  # chain attack animation ID
         specialAttacksLBA = []
         for i in range(0, 12):
             # LBA XXSP0X.SEQ (special attack animations)	 + unknown (probably more LBA tables, there are also special attack ids stored here.)
@@ -1864,8 +1861,7 @@ class VSSHPHeader:
         # pointer to magic effects section (relative to offset $F8)
         self.magicPtr = struct.unpack("I", file.read(4))[0] + self.dec
         self.unk3 = struct.unpack("24H", file.read(48))
-        self.AKAOPtr, self.groupPtr, self.vertexPtr, self.polygonPtr = struct.unpack(
-            "4I", file.read(16))
+        self.AKAOPtr, self.groupPtr, self.vertexPtr, self.polygonPtr = struct.unpack("4I", file.read(16))
         self.bonePtr = file.tell()
         self.AKAOPtr += self.dec
         self.groupPtr += self.dec
@@ -1875,8 +1871,7 @@ class VSSHPHeader:
     def tobin(self):
         bin = bytes()
         bin += (VS_HEADER)
-        bin += (struct.pack("2B 3H", self.numBones, self.numGroups,
-                            self.numTri, self.numQuad, self.numFace))
+        bin += (struct.pack("2B 3H", self.numBones, self.numGroups, self.numTri, self.numQuad, self.numFace))
         # TODO
         return bin
 
