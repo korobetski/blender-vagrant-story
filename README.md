@@ -14,13 +14,13 @@ The goal of this addon is mainly for modding purpose, use with cautions
 
 For now the only format supported for import and export is *.WEP Weapon Model format
 
-Work in progress SHP import, does not contains animations or default T-pose so the output model will be weird
+Work in progress SHP import, and loading the first corresponding SEQ
 
 Work in progress SEQ import, animations informations
 
 Work in progress ZUD import, SHP + WEP (sometimes with a shield) + SEQ (common + battle)
 
-Maybe more formats in the future...
+Work in progress MPD import, geometry ok, texturing by loading ZND textures foctionnal but not optimal...
 
 # Limitations :
 
@@ -50,6 +50,8 @@ in Addons window clic install and choose <a href="https://github.com/korobetski/
 # Discord :
 
 https://discord.gg/BRgsK77zkf
+
+<img src="https://github.com/korobetski/blender-vagrant-story/raw/master/crumbling_market.png"/>
 
 <img src="https://github.com/korobetski/blender-vagrant-story/raw/master/export.png"/>
 
