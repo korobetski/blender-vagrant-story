@@ -45,7 +45,7 @@ This script may contains bugs and patching Vagrant Story with an exported file f
 
 In Blender 2.91 go to Edit / Preferences...
 
-in Addons window clic install and choose <a href="https://github.com/korobetski/blender-vagrant-story/raw/master/vs_blender.py">vs_blender.py</a> file downloaded from this repository
+in Addons window clic install and choose the last release archive file downloaded from this repository : <a href="https://github.com/korobetski/blender-vagrant-story/releases">releases page</a>
 
 # Discord :
 
