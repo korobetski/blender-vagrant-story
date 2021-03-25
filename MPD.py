@@ -1,8 +1,20 @@
+bl_info = {
+    "name": "Vagrant Story file formats Add-on",
+    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND).",
+    "author": "Sigfrid Korobetski (LunaticChimera)",
+    "version": (2, 0),
+    "blender": (2, 92, 0),
+    "location": "File > Import-Export",
+    "category": "Import-Export",
+}
+
 #http://datacrystal.romhacking.net/wiki/Vagrant_Story:MPD_files
 
 import struct
 
 import bpy
+
+import bmesh
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
@@ -60,10 +72,17 @@ class MPD:
         file.close()
     def parse(self, file):
         self.header.feed(file)
+        
         # RoomSection
-        # file.seek(self.header.ptrRoomSection) useless
+        # file.seek(self.header.ptrRoomSection) # useless
         if self.header.lenRoomSection > 96:
             self.room.feed(file)
+        
+        print("lenDoorSection : "+repr(self.header.lenDoorSection))
+        if self.header.lenDoorSection > 0:
+            file.seek(self.header.ptrDoorSection)
+            
+
     def buildGeometry(self, znd = None):
         print("MPD Building...")
         # Creating Geometry and Mesh for Blender
@@ -140,6 +159,146 @@ class MPD:
         blender_mesh.validate(verbose=True)
         blender_mesh.update()
 
+        # WIP reversing collisions
+        collivertex = []
+        collifaces = []
+        for y in range(0, self.room.roomY):
+            for x in range(0, self.room.roomX):
+                k = y*self.room.roomX + x
+                tile = self.room.collisions[k]
+                print(tile)
+                z = tile.floor / 16
+                l = len(collivertex)
+                vert0 = (x, y, z)
+                vert1 = (x + 1, y, z)
+                vert2 = (x, y + 1, z)
+                vert3 = (x + 1, y + 1, z)
+                if self.room.tileModes[tile.floorMode] == (0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6):
+                    # one unit x+ ramp
+                    vert1 = (x + 1, y, z + 1)
+                    vert3 = (x + 1, y + 1, z + 1)
+                if self.room.tileModes[tile.floorMode] == (6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0):
+                    # one unit x- ramp
+                    vert0 = (x, y, z + 1)
+                    vert2 = (x, y + 1, z + 1)
+                if self.room.tileModes[tile.floorMode] == (6, 6, 6, 6, 4, 4, 4, 4, 2, 2, 2, 2, 0, 0, 0, 0):
+                    # one unit y+ ramp
+                    vert0 = (x, y, z + 1)
+                    vert1 = (x + 1, y, z + 1)
+                if self.room.tileModes[tile.floorMode] == (0, 0, 0, 0, 2, 2, 2, 2, 4, 4, 4, 4, 6, 6, 6, 6):
+                    # one unit y- ramp
+                    vert2 = (x, y + 1, z + 1)
+                    vert3 = (x + 1, y + 1, z + 1)
+
+                if self.room.tileModes[tile.floorMode] == (0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12):
+                    # double unit x+ ramp
+                    vert1 = (x + 1, y, z + 1)
+                    vert3 = (x + 1, y + 1, z + 1)
+                if self.room.tileModes[tile.floorMode] == (12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0):
+                    # double unit x- ramp
+                    vert0 = (x, y, z + 1)
+                    vert2 = (x, y + 1, z + 1)
+                if self.room.tileModes[tile.floorMode] == (12, 12, 12, 12, 8, 8, 8, 8, 4, 4, 4, 4, 0, 0, 0, 0):
+                    # double unit y+ ramp
+                    vert0 = (x, y, z + 1)
+                    vert1 = (x + 1, y, z + 1)
+                if self.room.tileModes[tile.floorMode] == (0, 0, 0, 0, 4, 4, 4, 4, 8, 8, 8, 8, 12, 12, 12, 12):
+                    # double unit y- ramp
+                    vert2 = (x, y + 1, z + 1)
+                    vert3 = (x + 1, y + 1, z + 1)
+
+
+                collivertex.append(vert0)
+                collivertex.append(vert1)
+                collivertex.append(vert2)
+                collivertex.append(vert3)
+                collifaces.append((l+0, l+1, l+3, l+2))
+
+        for y in range(0, self.room.roomY):
+            for x in range(0, self.room.roomX):
+                k = y*self.room.roomX + x
+                z = self.room.collisions[k].floor / 16
+                if z > 0:
+                    # we add "pillar faces"
+                    l = k*4
+                    l2 = len(collivertex)
+                    collivertex.extend([(x, y, 0)])
+                    collivertex.extend([(x + 1, y, 0)])
+                    collivertex.extend([(x, y + 1, 0)])
+                    collivertex.extend([(x + 1, y + 1, 0)])
+                    collifaces.extend([(l+0, l+1, l2+1, l2+0)])
+                    collifaces.extend([(l+1, l+3, l2+3, l2+1)])
+                    collifaces.extend([(l+3, l+2, l2+2, l2+3)])
+                    collifaces.extend([(l+2, l+0, l2+0, l2+2)])
+                    #collifaces.extend([(l+6, l+7, l+5, l+4)])
+        for y in range(0, self.room.roomY):
+            for x in range(0, self.room.roomX):
+                k = y*self.room.roomX + x
+                tile = self.room.collisions[k]
+                z = tile.ceil / 16
+                if self.room.tileModes[tile.ceilMode] != (131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131) :
+                    # we have a ceil collision
+                    l = len(collivertex)
+                    vert0 = (x, y, z)
+                    vert1 = (x + 1, y, z)
+                    vert2 = (x, y + 1, z)
+                    vert3 = (x + 1, y + 1, z)
+
+                    if self.room.tileModes[tile.ceilMode] == (0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6):
+                        # one unit x+ ramp
+                        vert1 = (x + 1, y, z + 1)
+                        vert3 = (x + 1, y + 1, z + 1)
+                    if self.room.tileModes[tile.ceilMode] == (6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0):
+                        # one unit x- ramp
+                        vert0 = (x, y, z + 1)
+                        vert2 = (x, y + 1, z + 1)
+                    if self.room.tileModes[tile.ceilMode] == (6, 6, 6, 6, 4, 4, 4, 4, 2, 2, 2, 2, 0, 0, 0, 0):
+                        # one unit y+ ramp
+                        vert0 = (x, y, z + 1)
+                        vert1 = (x + 1, y, z + 1)
+                    if self.room.tileModes[tile.ceilMode] == (0, 0, 0, 0, 2, 2, 2, 2, 4, 4, 4, 4, 6, 6, 6, 6):
+                        # one unit y- ramp
+                        vert2 = (x, y + 1, z + 1)
+                        vert3 = (x + 1, y + 1, z + 1)
+
+                    if self.room.tileModes[tile.ceilMode] == (0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12):
+                        # double unit x+ ramp
+                        vert1 = (x + 1, y, z + 1)
+                        vert3 = (x + 1, y + 1, z + 1)
+                    if self.room.tileModes[tile.ceilMode] == (12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0):
+                        # double unit x- ramp
+                        vert0 = (x, y, z + 1)
+                        vert2 = (x, y + 1, z + 1)
+                    if self.room.tileModes[tile.ceilMode] == (12, 12, 12, 12, 8, 8, 8, 8, 4, 4, 4, 4, 0, 0, 0, 0):
+                        # double unit y+ ramp
+                        vert0 = (x, y, z + 1)
+                        vert1 = (x + 1, y, z + 1)
+                    if self.room.tileModes[tile.ceilMode] == (0, 0, 0, 0, 4, 4, 4, 4, 8, 8, 8, 8, 12, 12, 12, 12):
+                        # double unit y- ramp
+                        vert2 = (x, y + 1, z + 1)
+                        vert3 = (x + 1, y + 1, z + 1)
+                    
+                    collivertex.append(vert0)
+                    collivertex.append(vert1)
+                    collivertex.append(vert2)
+                    collivertex.append(vert3)
+                    collifaces.append((l+0, l+1, l+3, l+2))
+
+                    collivertex.extend([(x, y, 16)])
+                    collivertex.extend([(x + 1, y, 16)])
+                    collivertex.extend([(x, y + 1, 16)])
+                    collivertex.extend([(x + 1, y + 1, 16)])
+                    collifaces.extend([(l+0, l+1, l+5, l+4)])
+                    collifaces.extend([(l+1, l+3, l+7, l+5)])
+                    collifaces.extend([(l+3, l+2, l+6, l+7)])
+                    collifaces.extend([(l+2, l+0, l+4, l+6)])
+
+
+
+        mymesh = bpy.data.meshes.new("collision")
+        myobject = bpy.data.objects.new("collision", mymesh)
+        bpy.context.scene.collection.objects.link(myobject)
+        mymesh.from_pydata(collivertex, [], collifaces)
         return blender_obj
 
 
@@ -207,6 +366,10 @@ class Room:
         self.groups = []
         self.materialRefs = []
         self.blender = BlenderDatas()
+        self.roomX = 0
+        self.roomY = 0
+        self.collisions = []
+        self.tileModes = []
     def feed(self, file):
         (
             self.lenGeometrySection,
@@ -256,6 +419,67 @@ class Room:
                 for ref in group.materialRefs:
                     if self.materialRefs.__contains__(ref) == False:
                         self.materialRefs.append(ref)
+        
+        # Collision Section
+        print("Collision Section  len("+repr(self.lenCollisionSection)+") at : "+repr(file.tell()))
+        ptrEndCollision = file.tell() + self.lenCollisionSection
+        #file.seek(self.lenCollisionSection, 1)
+        self.roomX, self.roomY, unk1, numTileModes = struct.unpack("4H", file.read(8))
+        print("roomX : "+repr(self.roomX)+", roomY : "+repr(self.roomY)+", unk1 : "+repr(unk1)+", numTileModes : "+repr(numTileModes))
+        self.collisions = []
+        for i in range(0, self.roomY * self.roomX):
+            tile = CollisionTile()
+            tile.index = i
+            tile.floorMode, tile.floor = struct.unpack("2B", file.read(2))
+            self.collisions.append(tile)
+        for i in range(0, self.roomY * self.roomX):
+            tile = self.collisions[i]
+            tile.ceilMode, tile.ceil = struct.unpack("2B", file.read(2))
+
+        self.tileModes = []
+        for i in range(0, numTileModes):
+            tileModesBytes = struct.unpack("16B", file.read(16))
+            self.tileModes.append(tileModesBytes)
+            print("tileModesBytes : "+repr(tileModesBytes))
+            # in MAP241.MPD
+            # tileModesBytes : (3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3)                                                     not walkable floor
+            # tileModesBytes : (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)                                                     common flat floor or ceil
+            # tileModesBytes : (0, 0, 0, 0, 0, 162, 162, 128, 0, 162, 162, 128, 0, 128, 128, 128)                                   street light obstacle
+            # tileModesBytes : (0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6)                                                     one unit x+ stairs (ramp)
+            # tileModesBytes : (2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2)                                                     chest (flat + half unit ?)
+            # tileModesBytes : (131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131)                     no ceil
+            # tileModesBytes : (0, 0, 0, 0, 4, 4, 4, 4, 8, 8, 8, 8, 12, 12, 12, 12)                                                 double inclined y- (ramp)
+            # tileModesBytes : (12, 12, 12, 12, 8, 8, 8, 8, 4, 4, 4, 4, 0, 0, 0, 0)                                                 double inclined y+ (ramp)
+            # tileModesBytes : (0, 2, 6, 10, 0, 2, 6, 10, 0, 2, 6, 10, 0, 2, 6, 10)                                                 ~double inclined x- (ramp)
+            # tileModesBytes : (12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0)                                                 double inclined x+ (ramp)
+            # in MAP045.MPD
+            # tileModesBytes : (3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3)
+            # tileModesBytes : (127, 127, 127, 0, 127, 127, 0, 0, 127, 0, 0, 0, 0, 0, 0, 0)                                         diagonal fill
+            # tileModesBytes : (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+            # tileModesBytes : (6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0)                                                     one unit x- stairs (ramp)
+            # tileModesBytes : (95, 95, 95, 0, 95, 95, 0, 0, 95, 0, 0, 0, 0, 0, 0, 0)                                               diagonal fill start higher
+            # tileModesBytes : (87, 87, 87, 0, 87, 87, 0, 0, 87, 0, 0, 0, 0, 0, 0, 0)
+            # tileModesBytes : (2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2)
+            # tileModesBytes : (0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 127, 127, 0, 127, 127, 127)
+            # tileModesBytes : (0, 0, 0, 0, 0, 0, 0, 103, 0, 0, 103, 103, 0, 103, 103, 103)
+            # tileModesBytes : (0, 0, 0, 0, 0, 0, 0, 95, 0, 0, 95, 95, 0, 95, 95, 95)
+            # tileModesBytes : (131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131)
+
+
+        # we skip unknown section
+        file.seek(ptrEndCollision+self.lenSubSection03)
+
+        print("file tell : "+repr(file.tell()))
+        # we must be in room doors section
+        numDoors = round(self.lenDoorSection /0x0C)
+        if self.lenDoorSection >= 0x0C:
+            for i in range(0, numDoors):
+                destZone, destRoom = struct.unpack("2B", file.read(2))
+                dunk = struct.unpack("6B", file.read(6))
+                doorId = struct.unpack("I", file.read(4))[0]
+                print("MPD door : "+" destZone : "+repr(destZone)+", destRoom : "+repr(destRoom)+" dunk : "+repr(dunk)+" doorId : "+repr(doorId))
+
+
                         
     def blenderize(self):
         print("blenderizing MPD Room...")
@@ -268,6 +492,8 @@ class Room:
                 self.blender.vertices.append(face.vertices[2].blenderSwaped())
                 self.blender.matrefs.append(face.materialRef)
                 # MPD faces has a special vertices order because normals must be inside instead of outside
+                # maybe we can use MeshPolygon.flip() ?
+                # https://docs.blender.org/api/current/bpy.types.MeshPolygon.html
                 if face.quad == True:
                     self.blender.vertices.append(face.vertices[3].blenderSwaped())
                     self.blender.faces.append((int(idx+3), int(idx+1), int(idx+0), int(idx+2)))
@@ -287,3 +513,13 @@ class BlenderDatas:
         self.colors = []
         self.uvs = []
         self.matrefs = []
+
+class CollisionTile:
+    def __init__(self):
+        self.index = 0
+        self.floor = 0
+        self.floorMode = 0
+        self.ceil = 0
+        self.ceilMode = 0
+    def __repr__(self):
+        return ("CollisionTile "+repr(self.index)+" : "+" floor : "+repr(self.floor)+", floorMode : "+repr(self.floorMode)+", ceil : "+repr(self.ceil)+", ceilMode : "+repr(self.ceilMode))

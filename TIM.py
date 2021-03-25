@@ -1,3 +1,13 @@
+bl_info = {
+    "name": "Vagrant Story file formats Add-on",
+    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND).",
+    "author": "Sigfrid Korobetski (LunaticChimera)",
+    "version": (2, 0),
+    "blender": (2, 92, 0),
+    "location": "File > Import-Export",
+    "category": "Import-Export",
+}
+
 import struct
 import bpy
 from . import color
@@ -93,10 +103,10 @@ class WEPTIM:
 
     def binsize(self):
         size = 8  # tim header
-        # we considere 48 colors
+        # we considere 48 colors per palette
         size += 16 * 2  # handle colors
-        size += 32 * 2 * 7  # pallets colors
-        size += self.textureWidth * self.textureHeigth  # clut one byte per pixel
+        size += 32 * 2 * 7  # palettes colors
+        size += self.textureWidth * self.textureHeigth  # indexes one byte per pixel
         return size
 
 class SHPTIM:
@@ -268,7 +278,7 @@ class TIM16BPP:
 
 
 
-
+# we don't need this anymore
 class FrameBuffer:
     def __init__(self):
         self.width = 1024

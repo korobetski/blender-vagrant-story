@@ -1,3 +1,14 @@
+bl_info = {
+    "name": "Vagrant Story file formats Add-on",
+    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND).",
+    "author": "Sigfrid Korobetski (LunaticChimera)",
+    "version": (2, 0),
+    "blender": (2, 92, 0),
+    "location": "File > Import-Export",
+    "category": "Import-Export",
+}
+
+
 # http://datacrystal.romhacking.net/wiki/Vagrant_Story:WEP_files
 
 
@@ -80,7 +91,11 @@ class WEP:
         self.vertices = []
         self.faces = []
         self.tim = TIM.WEPTIM()
-        self.rotations = []
+        self.rotations = [
+            (0, 0, 0, 7),
+            (0, 0, 0, 7),
+            (0, 0, 0, 7)
+        ]
     def __repr__(self):
         return("(--"+repr(self.name)+".WEP-- | "+repr(self.header)+")")
     def loadFromFile(self, filepath):
@@ -122,7 +137,7 @@ class WEP:
         if staves.__contains__(self.name):
             # its a staff, so we need to correct vertices of the first group
             for i in range(self.groups[0].numVertices):
-                self.vertices[i].x = (self.groups[0].bone.length * 2 - self.vertices[i].x)  # its work but why ?
+                self.vertices[i].x = (-self.groups[0].bone.length * 2 - self.vertices[i].x)  # its work but why ?
                 self.vertices[i].y = -self.vertices[i].y  # simple invert
 
         # WEP FACES SECTION
@@ -139,6 +154,7 @@ class WEP:
 
         self.rotations = []
         # Rotations
+        # not fully understood yet
         # the first row is always 0000000000000700 for all 127 .WEP files change values doesn't have a visual effect in game
         # the second row seems to control rotations, the last value 0x0700 doesn't have a visual effect in game (the last value is always 0x0700 every WEP every row)
         for i in range(0, 3):  # 3 axis ? 3 bones ?
@@ -148,9 +164,6 @@ class WEP:
             # with u2 = 0077 the weapon seems to rotate 180°(or maybe a multiple)
             u1, u2, u3, u4 = struct.unpack("<4h", file.read(8))
             print("rots : "+" u1 : "+repr(u1)+" - u2 : "+repr(u2)+" - u3 : "+repr(u3)+" - u4 : "+repr(u4))
-            u1 = u1 / 22.75
-            u2 = u2 / 22.75
-            u3 = u3 / 22.75
             self.rotations.append([u1, u2, u3, u4])
     def buildGeometry(self, material_index = 0):
         print("WEP Building...")
@@ -159,10 +172,24 @@ class WEP:
         mesh_name = self.name
         blender_mesh = bpy.data.meshes.new(name=mesh_name + "_MESH")
         blender_mesh.from_pydata(self.getVerticesForBlender(), [], self.getFacesForBlender())
-        # TODO : we need to handle double sided faces
+
+        # https://docs.blender.org/api/current/bpy.types.Mesh.html#bpy.types.Mesh.polygon_layers_int
+        # we can't store datas on faces, so we store face datas in mesh polygon layers instead
+        side_layer = blender_mesh.polygon_layers_int.new(name='side')
+        flag_layer = blender_mesh.polygon_layers_int.new(name='flag')
+        for face in self.faces:
+            side_layer.data[face.index].value = face.side
+            flag_layer.data[face.index].value = face.flag
 
         # Creating Materials & Textures for Blender
         # https://docs.blender.org/api/current/bpy.types.Material.html
+        # https://github.com/mac7ua/Palette-Generator/blob/master/Palette_Generator.py
+
+        palette = bpy.data.palettes.new(name=str(self.name + ".WEP_Common_Palette"))
+        for col in self.tim.handleColors:
+            palcol = palette.colors.new()
+            palcol.color = (col.R/255, col.G/255, col.B/255)
+
         vs_weapon_materials = ["Wood","Leather","Bronze","Iron","Hagane","Silver","Damascus"]
         for i in range(0, len(self.tim.textures)):
             mat = bpy.data.materials.new(name=str(self.name + "_"+vs_weapon_materials[i]+"_Mat"))
@@ -170,10 +197,12 @@ class WEP:
             mat.palette.ref = str(self.name + ".WEP_"+vs_weapon_materials[i]+"_Palette")
             mat.use_nodes = True
             mat.blend_method = "CLIP"  # to handle alpha cutout
-            # we save the pallet in paint mode
-            # maybe i should store common colors seperatly
+
+            # we save the palettes
             palette = bpy.data.palettes.new(name=str(self.name + ".WEP_"+vs_weapon_materials[i]+"_Palette"))
-            for col in self.tim.palletColors[i]:
+            # we skip handle colors thats why we start at 16
+            for j in range(16, 48):
+                col = self.tim.palletColors[i][j]
                 palcol = palette.colors.new()
                 palcol.color = (col.R/255, col.G/255, col.B/255)
 
@@ -212,6 +241,11 @@ class WEP:
 
         # maybe axis arn't the same in VS and Blender, we should care
         #blender_obj.rotation_euler = (math.radians(self.rotations[1][0]),math.radians(self.rotations[1][1]),math.radians(self.rotations[1][2]))
+
+        # we store datas for export
+        blender_mesh.datas.rots0 = (self.rotations[0][0], self.rotations[0][1], self.rotations[0][2])
+        blender_mesh.datas.rots1 = (self.rotations[1][0], self.rotations[1][1], self.rotations[1][2])
+        blender_mesh.datas.rots2 = (self.rotations[2][0], self.rotations[2][1], self.rotations[2][2])
 
         view_layer.objects.active = blender_obj
         blender_mesh.validate()
@@ -345,6 +379,8 @@ class WEP:
         uvlayer = blender_mesh.uv_layers.active
         self.faces = []
         loop_idx = 0
+        side_layer = blender_mesh.polygon_layers_int.get('side')
+        flag_layer = blender_mesh.polygon_layers_int.get('flag')
         for i in range(0, len(facets)):
             bface = facets[i]
             vnum = len(bface.vertices)
@@ -357,13 +393,19 @@ class WEP:
                 face.type = 0x24
                 face.size = 16
                 face.side = 4
-                face.alpha = 0
+                face.flag = 0
+                if side_layer is not None:
+                    face.side = side_layer.data[i].value
+                    face.flag = flag_layer.data[i].value
             elif vnum == 4:  # its a quad
                 self.header.numQuad += 1
                 face.type = 0x2C
                 face.size = 20
                 face.side = 4
                 face.alpha = 0
+                if side_layer is not None:
+                    face.side = side_layer.data[i].value
+                    face.flag = flag_layer.data[i].value
             # we need to organize indexes like VS do
             if vnum == 3:
                 face.vertices.append(bface.vertices[0])
@@ -421,6 +463,10 @@ class WEP:
                 loop_idx += 4
             self.faces.append(face)
 
+        self.rotations[0] = (blender_mesh.datas.rots0[0], blender_mesh.datas.rots0[1], blender_mesh.datas.rots0[2], 7)
+        self.rotations[1] = (blender_mesh.datas.rots1[0], blender_mesh.datas.rots1[1], blender_mesh.datas.rots1[2], 7)
+        self.rotations[2] = (blender_mesh.datas.rots0[0], blender_mesh.datas.rots2[1], blender_mesh.datas.rots2[2], 7)
+
         face_section_size = self.header.numTri * 16
         face_section_size += self.header.numQuad * 20
 
@@ -470,7 +516,7 @@ class WEP:
         bin += self.tim.tobin()
         # Default Rotation
         for i in range(0, 3):  # 3 axis
-            bin += struct.pack("4h", 0, 0, 0, 0x0007)
+            bin += struct.pack("4h", self.rotations[i][0], self.rotations[i][1], self.rotations[i][2], self.rotations[i][3])
         return bin
 
 

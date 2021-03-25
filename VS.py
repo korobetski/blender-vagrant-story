@@ -1,3 +1,13 @@
+bl_info = {
+    "name": "Vagrant Story file formats Add-on",
+    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND).",
+    "author": "Sigfrid Korobetski (LunaticChimera)",
+    "version": (2, 0),
+    "blender": (2, 92, 0),
+    "location": "File > Import-Export",
+    "category": "Import-Export",
+}
+
 SIG = b"H01\x00"
 VERTEX_RATIO = 128
 def MDPToZND(mdpName):

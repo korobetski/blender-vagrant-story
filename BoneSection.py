@@ -1,3 +1,14 @@
+bl_info = {
+    "name": "Vagrant Story file formats Add-on",
+    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND).",
+    "author": "Sigfrid Korobetski (LunaticChimera)",
+    "version": (2, 0),
+    "blender": (2, 92, 0),
+    "location": "File > Import-Export",
+    "category": "Import-Export",
+}
+
+
 # https://docs.blender.org/api/current/bpy.types.Bone.html
 
 # used in WEP, SHP and ZUD

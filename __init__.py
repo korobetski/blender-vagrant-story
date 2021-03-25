@@ -11,6 +11,8 @@ bl_info = {
 import bpy
 from . import WEP, SHP, SEQ, MPD, ZND, ZUD, TIM, color
 
+# https://docs.blender.org/api/current/bpy.props.html
+
 class MaterialPalette(bpy.types.PropertyGroup):
     bl_idname = "material.palette"
     bl_label = "Palette"
@@ -18,13 +20,25 @@ class MaterialPalette(bpy.types.PropertyGroup):
     #color: bpy.props.FloatVectorProperty(name="color")
 
 class BoneDatas(bpy.types.PropertyGroup):
-    # we store additionnal "useless" datas to rebuild imported formats
+    # we store additionnal "unused" datas to rebuild imported formats
     bl_idname = "bone.datas"
     bl_label = "VS Datas"
     mountId: bpy.props.IntProperty(name="groupId")
     bodyPartId: bpy.props.IntProperty(name="bodyPartId")
     mode: bpy.props.IntProperty(name="mode")
     unk: bpy.props.IntVectorProperty(name="unk")
+
+class MeshDatas(bpy.types.PropertyGroup):
+    # we store additionnal "unused" datas to rebuild imported formats
+    bl_idname = "mesh.datas"
+    bl_label = "VS Datas"
+    # we use bpy.types.Mesh.polygon_layers_int instead of custom props
+    #faces_sides: bpy.props.IntVectorProperty(name="faces_sides")
+    #faces_flags: bpy.props.IntVectorProperty(name="faces_flags")
+    rots0: bpy.props.IntVectorProperty(name="rots0")
+    rots1: bpy.props.IntVectorProperty(name="rots1")
+    rots2: bpy.props.IntVectorProperty(name="rots2")
+
 
 classes = (
     WEP.Import,
@@ -33,7 +47,8 @@ classes = (
     ZUD.Import,
     MPD.Import,
     MaterialPalette,
-    BoneDatas
+    BoneDatas,
+    MeshDatas
 )
 
 def register():
@@ -44,6 +59,7 @@ def register():
 
     bpy.types.Material.palette = bpy.props.PointerProperty(type=MaterialPalette)
     bpy.types.EditBone.datas = bpy.props.PointerProperty(type=BoneDatas)
+    bpy.types.Mesh.datas = bpy.props.PointerProperty(type=MeshDatas)
 
 
 def unregister():

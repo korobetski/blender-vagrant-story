@@ -1,3 +1,13 @@
+bl_info = {
+    "name": "Vagrant Story file formats Add-on",
+    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND).",
+    "author": "Sigfrid Korobetski (LunaticChimera)",
+    "version": (2, 0),
+    "blender": (2, 92, 0),
+    "location": "File > Import-Export",
+    "category": "Import-Export",
+}
+
 import struct
 from . import color, VertexSection
 
@@ -9,6 +19,7 @@ def parse(file, numFaces):
         face = Face()
         face.default()
         face.feed(file, i, coloredVertices)
+        # if a face use vertex color so the next will do the same
         if face.isColored == True:
             coloredVertices = True
         print(face)
