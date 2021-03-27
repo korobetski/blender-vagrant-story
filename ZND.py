@@ -71,7 +71,7 @@ class ZND:
             timptr = file.tell()
             tim = TIM.TIM16BPP()
             tim.parse(i, file, timptr, tlen)
-            print(tim)
+            #print(tim)
             self.tims.append(tim)
             file.seek(timptr+tlen)
         

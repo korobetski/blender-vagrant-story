@@ -11,6 +11,7 @@ bl_info = {
 #http://datacrystal.romhacking.net/wiki/Vagrant_Story:MPD_files
 
 import struct
+from enum import Enum
 
 import bpy
 
@@ -166,46 +167,49 @@ class MPD:
             for x in range(0, self.room.roomX):
                 k = y*self.room.roomX + x
                 tile = self.room.collisions[k]
-                print(tile)
+                #print(tile)
                 z = tile.floor / 16
                 l = len(collivertex)
                 vert0 = (x, y, z)
                 vert1 = (x + 1, y, z)
                 vert2 = (x, y + 1, z)
                 vert3 = (x + 1, y + 1, z)
-                if self.room.tileModes[tile.floorMode] == (0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6):
+                if self.room.tileModes[tile.floorMode] == TileMode.RAMP1Xp:
                     # one unit x+ ramp
                     vert1 = (x + 1, y, z + 1)
                     vert3 = (x + 1, y + 1, z + 1)
-                if self.room.tileModes[tile.floorMode] == (6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0):
+                elif self.room.tileModes[tile.floorMode] == TileMode.RAMP1Xn:
                     # one unit x- ramp
                     vert0 = (x, y, z + 1)
                     vert2 = (x, y + 1, z + 1)
-                if self.room.tileModes[tile.floorMode] == (6, 6, 6, 6, 4, 4, 4, 4, 2, 2, 2, 2, 0, 0, 0, 0):
+                elif self.room.tileModes[tile.floorMode] == TileMode.RAMP1Yp:
                     # one unit y+ ramp
                     vert0 = (x, y, z + 1)
                     vert1 = (x + 1, y, z + 1)
-                if self.room.tileModes[tile.floorMode] == (0, 0, 0, 0, 2, 2, 2, 2, 4, 4, 4, 4, 6, 6, 6, 6):
+                elif self.room.tileModes[tile.floorMode] == TileMode.RAMP1Yn:
                     # one unit y- ramp
                     vert2 = (x, y + 1, z + 1)
                     vert3 = (x + 1, y + 1, z + 1)
 
-                if self.room.tileModes[tile.floorMode] == (0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12):
+                elif self.room.tileModes[tile.floorMode] == TileMode.RAMP2Xp:
                     # double unit x+ ramp
                     vert1 = (x + 1, y, z + 1)
                     vert3 = (x + 1, y + 1, z + 1)
-                if self.room.tileModes[tile.floorMode] == (12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0):
+                elif self.room.tileModes[tile.floorMode] == TileMode.RAMP2Xn:
                     # double unit x- ramp
                     vert0 = (x, y, z + 1)
                     vert2 = (x, y + 1, z + 1)
-                if self.room.tileModes[tile.floorMode] == (12, 12, 12, 12, 8, 8, 8, 8, 4, 4, 4, 4, 0, 0, 0, 0):
+                elif self.room.tileModes[tile.floorMode] == TileMode.RAMP2Yp:
                     # double unit y+ ramp
                     vert0 = (x, y, z + 1)
                     vert1 = (x + 1, y, z + 1)
-                if self.room.tileModes[tile.floorMode] == (0, 0, 0, 0, 4, 4, 4, 4, 8, 8, 8, 8, 12, 12, 12, 12):
+                elif self.room.tileModes[tile.floorMode] == TileMode.RAMP2Yn:
                     # double unit y- ramp
                     vert2 = (x, y + 1, z + 1)
                     vert3 = (x + 1, y + 1, z + 1)
+                elif self.room.tileModes[tile.floorMode] == (TileMode.CHEST or TileMode.HALF):
+                    vert2 = (x, y + 1, z + 0.5)
+                    vert3 = (x + 1, y + 1, z + 0.5)
 
 
                 collivertex.append(vert0)
@@ -222,21 +226,49 @@ class MPD:
                     # we add "pillar faces"
                     l = k*4
                     l2 = len(collivertex)
-                    collivertex.extend([(x, y, 0)])
-                    collivertex.extend([(x + 1, y, 0)])
-                    collivertex.extend([(x, y + 1, 0)])
-                    collivertex.extend([(x + 1, y + 1, 0)])
-                    collifaces.extend([(l+0, l+1, l2+1, l2+0)])
-                    collifaces.extend([(l+1, l+3, l2+3, l2+1)])
-                    collifaces.extend([(l+3, l+2, l2+2, l2+3)])
-                    collifaces.extend([(l+2, l+0, l2+0, l2+2)])
-                    #collifaces.extend([(l+6, l+7, l+5, l+4)])
+
+                    if self.room.tileModes[tile.floorMode] == (TileMode.DIAGX):
+                        collivertex.append((x, y, 0))
+                        collivertex.append((x + 1, y, 0))
+                        collivertex.append((x, y + 1, 0))
+                        collivertex.append((x + 1, y, 255))
+                        collivertex.append((x, y + 1, 255))
+                        collivertex.append((x + 1, y + 1, 255))
+                        collifaces.append((l+0, l+1, l2+1, l2+0))
+                        collifaces.append((l+2, l+0, l2+0, l2+2))
+                        collifaces.append((l+2, l+1, l2+1, l2+2)) # bot diag
+                        collifaces.append((l+1, l+3, l2+5, l2+3))
+                        collifaces.append((l+3, l+2, l2+4, l2+5))
+                        collifaces.append((l+1, l+2, l2+4, l2+3)) # top diag
+                    elif self.room.tileModes[tile.floorMode] == (TileMode.DIAGY):
+                        collivertex.append((x, y, 0))
+                        collivertex.append((x + 1, y, 0))
+                        collivertex.append((x + 1, y + 1, 0))
+                        collivertex.append((x, y, 255))
+                        collivertex.append((x, y + 1, 255))
+                        collivertex.append((x + 1, y + 1, 255))
+                        collifaces.append((l+0, l+1, l2+1, l2+0))
+                        collifaces.append((l+2, l+0, l2+0, l2+2))
+                        collifaces.append((l+2, l+1, l2+1, l2+2)) # bot diag
+                        collifaces.append((l+1, l+3, l2+5, l2+3))
+                        collifaces.append((l+3, l+2, l2+4, l2+5))
+                        collifaces.append((l+1, l+2, l2+4, l2+3)) # top diag
+                    else:
+                        collivertex.append((x, y, 0))
+                        collivertex.append((x + 1, y, 0))
+                        collivertex.append((x, y + 1, 0))
+                        collivertex.append((x + 1, y + 1, 0))
+                        collifaces.append((l+0, l+1, l2+1, l2+0))
+                        collifaces.append((l+1, l+3, l2+3, l2+1))
+                        collifaces.append((l+3, l+2, l2+2, l2+3))
+                        collifaces.append((l+2, l+0, l2+0, l2+2))
+                        #collifaces.append((l+6, l+7, l+5, l+4))
         for y in range(0, self.room.roomY):
             for x in range(0, self.room.roomX):
                 k = y*self.room.roomX + x
                 tile = self.room.collisions[k]
                 z = tile.ceil / 16
-                if self.room.tileModes[tile.ceilMode] != (131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131) :
+                if self.room.tileModes[tile.ceilMode] != TileMode.VOID :
                     # we have a ceil collision
                     l = len(collivertex)
                     vert0 = (x, y, z)
@@ -244,39 +276,42 @@ class MPD:
                     vert2 = (x, y + 1, z)
                     vert3 = (x + 1, y + 1, z)
 
-                    if self.room.tileModes[tile.ceilMode] == (0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6):
+                    if self.room.tileModes[tile.ceilMode] == TileMode.RAMP1Xp:
                         # one unit x+ ramp
                         vert1 = (x + 1, y, z + 1)
                         vert3 = (x + 1, y + 1, z + 1)
-                    if self.room.tileModes[tile.ceilMode] == (6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0):
+                    elif self.room.tileModes[tile.ceilMode] == TileMode.RAMP1Xn:
                         # one unit x- ramp
                         vert0 = (x, y, z + 1)
                         vert2 = (x, y + 1, z + 1)
-                    if self.room.tileModes[tile.ceilMode] == (6, 6, 6, 6, 4, 4, 4, 4, 2, 2, 2, 2, 0, 0, 0, 0):
+                    elif self.room.tileModes[tile.ceilMode] == TileMode.RAMP1Yp:
                         # one unit y+ ramp
                         vert0 = (x, y, z + 1)
                         vert1 = (x + 1, y, z + 1)
-                    if self.room.tileModes[tile.ceilMode] == (0, 0, 0, 0, 2, 2, 2, 2, 4, 4, 4, 4, 6, 6, 6, 6):
+                    elif self.room.tileModes[tile.ceilMode] == TileMode.RAMP1Yn:
                         # one unit y- ramp
                         vert2 = (x, y + 1, z + 1)
                         vert3 = (x + 1, y + 1, z + 1)
 
-                    if self.room.tileModes[tile.ceilMode] == (0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12):
+                    elif self.room.tileModes[tile.ceilMode] == TileMode.RAMP2Xp:
                         # double unit x+ ramp
                         vert1 = (x + 1, y, z + 1)
                         vert3 = (x + 1, y + 1, z + 1)
-                    if self.room.tileModes[tile.ceilMode] == (12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0):
+                    elif self.room.tileModes[tile.ceilMode] == TileMode.RAMP2Xn:
                         # double unit x- ramp
                         vert0 = (x, y, z + 1)
                         vert2 = (x, y + 1, z + 1)
-                    if self.room.tileModes[tile.ceilMode] == (12, 12, 12, 12, 8, 8, 8, 8, 4, 4, 4, 4, 0, 0, 0, 0):
+                    elif self.room.tileModes[tile.ceilMode] == TileMode.RAMP2Yp:
                         # double unit y+ ramp
                         vert0 = (x, y, z + 1)
                         vert1 = (x + 1, y, z + 1)
-                    if self.room.tileModes[tile.ceilMode] == (0, 0, 0, 0, 4, 4, 4, 4, 8, 8, 8, 8, 12, 12, 12, 12):
+                    elif self.room.tileModes[tile.ceilMode] == TileMode.RAMP2Yn:
                         # double unit y- ramp
                         vert2 = (x, y + 1, z + 1)
                         vert3 = (x + 1, y + 1, z + 1)
+                    elif self.room.tileModes[tile.ceilMode] == (TileMode.CHEST or TileMode.HALF):
+                        vert2 = (x, y + 1, z + 0.5)
+                        vert3 = (x + 1, y + 1, z + 0.5)
                     
                     collivertex.append(vert0)
                     collivertex.append(vert1)
@@ -284,14 +319,14 @@ class MPD:
                     collivertex.append(vert3)
                     collifaces.append((l+0, l+1, l+3, l+2))
 
-                    collivertex.extend([(x, y, 16)])
-                    collivertex.extend([(x + 1, y, 16)])
-                    collivertex.extend([(x, y + 1, 16)])
-                    collivertex.extend([(x + 1, y + 1, 16)])
-                    collifaces.extend([(l+0, l+1, l+5, l+4)])
-                    collifaces.extend([(l+1, l+3, l+7, l+5)])
-                    collifaces.extend([(l+3, l+2, l+6, l+7)])
-                    collifaces.extend([(l+2, l+0, l+4, l+6)])
+                    collivertex.append((x, y, 16))
+                    collivertex.append((x + 1, y, 16))
+                    collivertex.append((x, y + 1, 16))
+                    collivertex.append((x + 1, y + 1, 16))
+                    collifaces.append((l+0, l+1, l+5, l+4))
+                    collifaces.append((l+1, l+3, l+7, l+5))
+                    collifaces.append((l+3, l+2, l+6, l+7))
+                    collifaces.append((l+2, l+0, l+4, l+6))
 
 
 
@@ -333,6 +368,13 @@ class MPDHeader:
             self.ptrTreasureSection,
             self.lenTreasureSection,
         ) = struct.unpack("12I", file.read(48))
+        
+        print("Room Section  len("+repr(self.lenRoomSection)+") at : "+repr(self.ptrRoomSection))
+        print("Cleared Section  len("+repr(self.lenClearedSection)+") at : "+repr(self.ptrClearedSection))
+        print("Script Section  len("+repr(self.lenScriptSection)+") at : "+repr(self.ptrScriptSection))
+        print("Door Section  len("+repr(self.lenDoorSection)+") at : "+repr(self.ptrDoorSection))
+        print("Enemy Section  len("+repr(self.lenEnemySection)+") at : "+repr(self.ptrEnemySection))
+        print("Treasure Section  len("+repr(self.lenTreasureSection)+") at : "+repr(self.ptrTreasureSection))
 
 
 
@@ -400,6 +442,9 @@ class Room:
             self.lenSubSection18,
         ) = struct.unpack("12I", file.read(48))
 
+        # Geometry Section  
+        print("Geometry Section  len("+repr(self.lenGeometrySection)+") at : "+repr(file.tell()))
+
         if self.lenGeometrySection > 4:
             # GeometrySection (Polygon groups)
             self.numGroups = struct.unpack("I", file.read(4))[0]
@@ -425,6 +470,7 @@ class Room:
         ptrEndCollision = file.tell() + self.lenCollisionSection
         #file.seek(self.lenCollisionSection, 1)
         self.roomX, self.roomY, unk1, numTileModes = struct.unpack("4H", file.read(8))
+        # unk1 seems to be always 0x00
         print("roomX : "+repr(self.roomX)+", roomY : "+repr(self.roomY)+", unk1 : "+repr(unk1)+", numTileModes : "+repr(numTileModes))
         self.collisions = []
         for i in range(0, self.roomY * self.roomX):
@@ -439,45 +485,138 @@ class Room:
         self.tileModes = []
         for i in range(0, numTileModes):
             tileModesBytes = struct.unpack("16B", file.read(16))
-            self.tileModes.append(tileModesBytes)
-            print("tileModesBytes : "+repr(tileModesBytes))
-            # in MAP241.MPD
-            # tileModesBytes : (3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3)                                                     not walkable floor
-            # tileModesBytes : (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)                                                     common flat floor or ceil
-            # tileModesBytes : (0, 0, 0, 0, 0, 162, 162, 128, 0, 162, 162, 128, 0, 128, 128, 128)                                   street light obstacle
-            # tileModesBytes : (0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6)                                                     one unit x+ stairs (ramp)
-            # tileModesBytes : (2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2)                                                     chest (flat + half unit ?)
-            # tileModesBytes : (131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131)                     no ceil
-            # tileModesBytes : (0, 0, 0, 0, 4, 4, 4, 4, 8, 8, 8, 8, 12, 12, 12, 12)                                                 double inclined y- (ramp)
-            # tileModesBytes : (12, 12, 12, 12, 8, 8, 8, 8, 4, 4, 4, 4, 0, 0, 0, 0)                                                 double inclined y+ (ramp)
-            # tileModesBytes : (0, 2, 6, 10, 0, 2, 6, 10, 0, 2, 6, 10, 0, 2, 6, 10)                                                 ~double inclined x- (ramp)
-            # tileModesBytes : (12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0)                                                 double inclined x+ (ramp)
-            # in MAP045.MPD
-            # tileModesBytes : (3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3)
-            # tileModesBytes : (127, 127, 127, 0, 127, 127, 0, 0, 127, 0, 0, 0, 0, 0, 0, 0)                                         diagonal fill
-            # tileModesBytes : (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-            # tileModesBytes : (6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0)                                                     one unit x- stairs (ramp)
-            # tileModesBytes : (95, 95, 95, 0, 95, 95, 0, 0, 95, 0, 0, 0, 0, 0, 0, 0)                                               diagonal fill start higher
-            # tileModesBytes : (87, 87, 87, 0, 87, 87, 0, 0, 87, 0, 0, 0, 0, 0, 0, 0)
-            # tileModesBytes : (2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2)
-            # tileModesBytes : (0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 127, 127, 0, 127, 127, 127)
-            # tileModesBytes : (0, 0, 0, 0, 0, 0, 0, 103, 0, 0, 103, 103, 0, 103, 103, 103)
-            # tileModesBytes : (0, 0, 0, 0, 0, 0, 0, 95, 0, 0, 95, 95, 0, 95, 95, 95)
-            # tileModesBytes : (131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131)
+            #self.tileModes.append(tileModesBytes)
+            #print("tileModesBytes : "+repr(tileModesBytes))
+            if tileModesBytes == (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0):
+                self.tileModes.append(TileMode.FLAT)
+            elif tileModesBytes == (2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2):
+                self.tileModes.append(TileMode.CHEST)
+            elif tileModesBytes == (3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3):
+                self.tileModes.append(TileMode.FULL)
+            elif tileModesBytes == (131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131, 131):
+                self.tileModes.append(TileMode.VOID)
+            elif tileModesBytes == (0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6, 0, 2, 4, 6):
+                # one unit x+ ramp
+                self.tileModes.append(TileMode.RAMP1Xp)
+            elif tileModesBytes == (6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0, 6, 4, 2, 0):
+                # one unit x- ramp
+                self.tileModes.append(TileMode.RAMP1Xn)
+            elif tileModesBytes == (6, 6, 6, 6, 4, 4, 4, 4, 2, 2, 2, 2, 0, 0, 0, 0):
+                # one unit y+ ramp
+                self.tileModes.append(TileMode.RAMP1Yp)
+            elif tileModesBytes == (0, 0, 0, 0, 2, 2, 2, 2, 4, 4, 4, 4, 6, 6, 6, 6):
+                # one unit y- ramp
+                self.tileModes.append(TileMode.RAMP1Yn)
+            elif tileModesBytes == (0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12, 0, 4, 8, 12):
+                # double unit x+ ramp
+                self.tileModes.append(TileMode.RAMP2Xp)
+            elif tileModesBytes == (12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0, 12, 8, 4, 0):
+                # double unit x- ramp
+                self.tileModes.append(TileMode.RAMP2Xn)
+            elif tileModesBytes == (12, 12, 12, 12, 8, 8, 8, 8, 4, 4, 4, 4, 0, 0, 0, 0):
+                # one unit y+ ramp
+                self.tileModes.append(TileMode.RAMP2Yp)
+            elif tileModesBytes == (0, 0, 0, 0, 4, 4, 4, 4, 8, 8, 8, 8, 12, 12, 12, 12):
+                self.tileModes.append(TileMode.RAMP2Yn)
+            elif tileModesBytes[0] == tileModesBytes[1] == tileModesBytes[2] == tileModesBytes[4] == tileModesBytes[5] == tileModesBytes[8]:
+                self.tileModes.append(TileMode.DIAGX)
+            elif tileModesBytes[7] == tileModesBytes[10] == tileModesBytes[11] == tileModesBytes[13] == tileModesBytes[14] == tileModesBytes[15]:
+                self.tileModes.append(TileMode.DIAGY)
+            else:
+                self.tileModes.append(TileMode.FLAT)
 
 
         # we skip unknown section
+        print("SubSection03  len("+repr(self.lenSubSection03)+") at : "+repr(file.tell()))
+        # for i in range(0, self.roomX * self.roomY):
+        #   file.read(4)
         file.seek(ptrEndCollision+self.lenSubSection03)
 
-        print("file tell : "+repr(file.tell()))
+        # Door section (maybe more a warp section)
+        print("Room Door Section  len("+repr(self.lenDoorSection)+") at : "+repr(file.tell()))
         # we must be in room doors section
         numDoors = round(self.lenDoorSection /0x0C)
         if self.lenDoorSection >= 0x0C:
             for i in range(0, numDoors):
                 destZone, destRoom = struct.unpack("2B", file.read(2))
-                dunk = struct.unpack("6B", file.read(6))
+                rawTileId = struct.unpack("H", file.read(2))[0]
+                dunk = struct.unpack("4B", file.read(4))
                 doorId = struct.unpack("I", file.read(4))[0]
-                print("MPD door : "+" destZone : "+repr(destZone)+", destRoom : "+repr(destRoom)+" dunk : "+repr(dunk)+" doorId : "+repr(doorId))
+                # the door section seems to use a grid of 32x32
+                # so we need to adapt tileId to the current MPD room grid to figure where the door must be
+                tileId = round(rawTileId / 32) * self.roomX + (rawTileId % 32)
+                print("MPD door : "+" destZone : "+repr(destZone)+", destRoom : "+repr(destRoom)+" doorId : "+repr(doorId)+" rawTileId : "+repr(rawTileId)+" tileId : "+repr(tileId)+" dunk : "+repr(dunk))
+        
+        print("LightingSection  len("+repr(self.lenLightingSection)+") at : "+repr(file.tell()))
+        file.seek(self.lenLightingSection, 1)
+        
+        print("SubSection06  len("+repr(self.lenSubSection06)+") at : "+repr(file.tell()))
+        # looks like colors ?
+        file.seek(self.lenSubSection06, 1)
+        
+        print("SubSection07  len("+repr(self.lenSubSection07)+") at : "+repr(file.tell()))
+        # 256 * 0x00 in MAP014.MPD
+        file.seek(self.lenSubSection07, 1)
+        
+        print("SubSection08  len("+repr(self.lenSubSection08)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection08, 1)
+        
+        print("SubSection09  len("+repr(self.lenSubSection09)+") at : "+repr(file.tell()))
+        # 0100 0800 0000 1000 01FF 0200 in MAP014.MPD
+        file.seek(self.lenSubSection09, 1)
+        
+        print("SubSection0A  len("+repr(self.lenSubSection0A)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection0A, 1)
+        
+        print("SubSection0B  len("+repr(self.lenSubSection0B)+") at : "+repr(file.tell()))
+        # 0000 0000 0000 0000 0000 0000 0000 0000 
+        # 0000 0000 0000 0000 0000 0000 0000 0000
+        # 0000 0000 0000 0000 0000 0000 0100 0000
+        # 0000 0000 0000 0000 0000 0000 0000 0000
+        # 0000 0000 0000 0000 0000 0000 0000 0000
+        # 0100 FFFF FFFF 0900  in MAP014.MPD
+        file.seek(self.lenSubSection0B, 1)
+        
+        print("TextureEffectsSection  len("+repr(self.lenTextureEffectsSection)+") at : "+repr(file.tell()))
+        # 96 + 16 * 36 ?
+        file.seek(self.lenTextureEffectsSection, 1)
+        
+        print("SubSection0D  len("+repr(self.lenSubSection0D)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection0D, 1)
+        
+        print("SubSection0E  len("+repr(self.lenSubSection0E)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection0E, 1)
+        
+        print("SubSection0F  len("+repr(self.lenSubSection0F)+") at : "+repr(file.tell()))
+        # 32 bytes header + x*8 bytes blocks
+        file.seek(self.lenSubSection0F, 1)
+        
+        print("SubSection10  len("+repr(self.lenSubSection10)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection10, 1)
+        
+        print("SubSection11  len("+repr(self.lenSubSection11)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection11, 1)
+        
+        print("SubSection12  len("+repr(self.lenSubSection12)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection12, 1)
+        
+        print("SubSection13  len("+repr(self.lenSubSection13)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection13, 1)
+        
+        print("AKAOSubSection  len("+repr(self.lenAKAOSubSection)+") at : "+repr(file.tell()))
+        file.seek(self.lenAKAOSubSection, 1)
+        
+        print("SubSection15  len("+repr(self.lenSubSection15)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection15, 1)
+        
+        print("SubSection16  len("+repr(self.lenSubSection16)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection16, 1)
+        
+        print("SubSection17  len("+repr(self.lenSubSection17)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection17, 1)
+        
+        print("SubSection18  len("+repr(self.lenSubSection18)+") at : "+repr(file.tell()))
+        file.seek(self.lenSubSection18, 1)
 
 
                         
@@ -523,3 +662,22 @@ class CollisionTile:
         self.ceilMode = 0
     def __repr__(self):
         return ("CollisionTile "+repr(self.index)+" : "+" floor : "+repr(self.floor)+", floorMode : "+repr(self.floorMode)+", ceil : "+repr(self.ceil)+", ceilMode : "+repr(self.ceilMode))
+
+
+class TileMode(Enum):
+    FULL = 0
+    FLAT = 1
+    RAMP1Xp = 2
+    RAMP1Xn = 3
+    RAMP1Yp = 4
+    RAMP1Yn = 5
+    RAMP2Xp = 6
+    RAMP2Xn = 7
+    RAMP2Yp = 8
+    RAMP2Yn = 9
+    BUMP = 10
+    DIAGX = 11
+    DIAGY = 12
+    VOID = 13
+    CHEST = 14
+    HALF = 15
