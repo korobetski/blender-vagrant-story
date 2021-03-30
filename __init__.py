@@ -9,7 +9,7 @@ bl_info = {
 }
 
 import bpy
-from . import WEP, SHP, SEQ, MPD, ZND, ZUD, TIM, color
+from . import WEP, SHP, SEQ, MPD, ZND, ZUD, TIM, EFFECT, color
 
 # https://docs.blender.org/api/current/bpy.props.html
 
@@ -46,6 +46,7 @@ classes = (
     SHP.Import,
     ZUD.Import,
     MPD.Import,
+    EFFECT.Import,
     MaterialPalette,
     BoneDatas,
     MeshDatas
@@ -75,6 +76,7 @@ def menu_func_import(self, context):
     self.layout.operator(ZUD.Import.bl_idname, text="Vagrant Story Zone Unit Datas (.ZUD)")
     self.layout.operator(MPD.Import.bl_idname, text="Vagrant Story Map Datas (.MPD)")
     #self.layout.operator(ImportZND.bl_idname,text="Vagrant Story Zone Datas(.ZND)")
+    self.layout.operator(EFFECT.Import.bl_idname, text="Vagrant Story Effect (.P)")
 
 def menu_func_export(self, context):
     self.layout.operator(WEP.Export.bl_idname, text="Vagrant Story Weapon (.WEP)")
