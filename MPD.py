@@ -1,8 +1,8 @@
 bl_info = {
     "name": "Vagrant Story file formats Add-on",
-    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND).",
+    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 0),
+    "version": (2, 1),
     "blender": (2, 92, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
@@ -14,12 +14,13 @@ import struct
 from enum import Enum
 
 import bpy
+import math
 
 import bmesh
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
-from . import GroupSection, ZND, VS
+from . import GroupSection, ZND, VS, ARM
 
 
 class Import(bpy.types.Operator, ImportHelper):
@@ -73,15 +74,18 @@ class MPD:
         file.close()
     def parse(self, file):
         self.header.feed(file)
+
+        print("Room Section         len("+repr(self.header.lenRoomSection)+")           at : "+repr("{0:8X}".format(self.header.ptrRoomSection)))
         
         # RoomSection
-        # file.seek(self.header.ptrRoomSection) # useless
         if self.header.lenRoomSection > 96:
             self.room.feed(file)
-        
-        print("lenDoorSection : "+repr(self.header.lenDoorSection))
-        if self.header.lenDoorSection > 0:
-            file.seek(self.header.ptrDoorSection)
+
+        print("Cleared Section          len("+repr(self.header.lenClearedSection)+")            at : "+repr("{0:8X}".format(self.header.ptrClearedSection)))
+        print("Script Section           len("+repr(self.header.lenScriptSection)+")         at : "+repr("{0:8X}".format(self.header.ptrScriptSection)))
+        print("Door Section             len("+repr(self.header.lenDoorSection)+")           at : "+repr("{0:8X}".format(self.header.ptrDoorSection)))
+        print("Enemy Section            len("+repr(self.header.lenEnemySection)+")          at : "+repr("{0:8X}".format(self.header.ptrEnemySection)))
+        print("Treasure Section         len("+repr(self.header.lenTreasureSection)+")           at : "+repr("{0:8X}".format(self.header.ptrTreasureSection)))
             
 
     def buildGeometry(self, znd = None):
@@ -159,6 +163,8 @@ class MPD:
 
         blender_mesh.validate(verbose=True)
         blender_mesh.update()
+
+        self.room.arm.buildGeometry()
 
         # WIP reversing collisions
         collivertex = []
@@ -368,13 +374,6 @@ class MPDHeader:
             self.ptrTreasureSection,
             self.lenTreasureSection,
         ) = struct.unpack("12I", file.read(48))
-        
-        print("Room Section  len("+repr(self.lenRoomSection)+") at : "+repr(self.ptrRoomSection))
-        print("Cleared Section  len("+repr(self.lenClearedSection)+") at : "+repr(self.ptrClearedSection))
-        print("Script Section  len("+repr(self.lenScriptSection)+") at : "+repr(self.ptrScriptSection))
-        print("Door Section  len("+repr(self.lenDoorSection)+") at : "+repr(self.ptrDoorSection))
-        print("Enemy Section  len("+repr(self.lenEnemySection)+") at : "+repr(self.ptrEnemySection))
-        print("Treasure Section  len("+repr(self.lenTreasureSection)+") at : "+repr(self.ptrTreasureSection))
 
 
 
@@ -382,19 +381,19 @@ class Room:
     def __init__(self):
         self.lenGeometrySection = 0
         self.lenCollisionSection = 0
-        self.lenSubSection03 = 0
+        self.lenTilePropertiesSection = 0
         self.lenDoorSection = 0
         self.lenLightingSection = 0
         self.lenSubSection06 = 0
         self.lenSubSection07 = 0
         self.lenSubSection08 = 0
-        self.lenSubSection09 = 0
+        self.lenTrapSection = 0
         self.lenSubSection0A = 0
         self.lenSubSection0B = 0
         self.lenTextureEffectsSection = 0
         self.lenSubSection0D = 0
         self.lenSubSection0E = 0
-        self.lenSubSection0F = 0
+        self.lenMiniMapSection = 0
         self.lenSubSection10 = 0
         self.lenSubSection11 = 0
         self.lenSubSection12 = 0
@@ -403,7 +402,7 @@ class Room:
         self.lenSubSection15 = 0
         self.lenSubSection16 = 0
         self.lenSubSection17 = 0
-        self.lenSubSection18 = 0
+        self.lenCameraAreaSection = 0
         self.numGroups = 0
         self.groups = []
         self.materialRefs = []
@@ -412,17 +411,18 @@ class Room:
         self.roomY = 0
         self.collisions = []
         self.tileModes = []
+        self.arm = None
     def feed(self, file):
         (
             self.lenGeometrySection,
             self.lenCollisionSection,
-            self.lenSubSection03,
+            self.lenTilePropertiesSection,
             self.lenDoorSection,
             self.lenLightingSection,
             self.lenSubSection06,
             self.lenSubSection07,
             self.lenSubSection08,
-            self.lenSubSection09,
+            self.lenTrapSection,
             self.lenSubSection0A,
             self.lenSubSection0B,
             self.lenTextureEffectsSection,
@@ -430,7 +430,7 @@ class Room:
         (
             self.lenSubSection0D,
             self.lenSubSection0E,
-            self.lenSubSection0F,
+            self.lenMiniMapSection,
             self.lenSubSection10,
             self.lenSubSection11,
             self.lenSubSection12,
@@ -439,11 +439,11 @@ class Room:
             self.lenSubSection15,
             self.lenSubSection16,
             self.lenSubSection17,
-            self.lenSubSection18,
+            self.lenCameraAreaSection,
         ) = struct.unpack("12I", file.read(48))
 
         # Geometry Section  
-        print("Geometry Section  len("+repr(self.lenGeometrySection)+") at : "+repr(file.tell()))
+        print("Geometry Section  len("+repr(self.lenGeometrySection)+") at : "+repr("{0:8X}".format(file.tell())))
 
         if self.lenGeometrySection > 4:
             # GeometrySection (Polygon groups)
@@ -466,7 +466,7 @@ class Room:
                         self.materialRefs.append(ref)
         
         # Collision Section
-        print("Collision Section  len("+repr(self.lenCollisionSection)+") at : "+repr(file.tell()))
+        print("Collision Section  len("+repr(self.lenCollisionSection)+") at : "+repr("{0:8X}".format(file.tell())))
         ptrEndCollision = file.tell() + self.lenCollisionSection
         #file.seek(self.lenCollisionSection, 1)
         self.roomX, self.roomY, unk1, numTileModes = struct.unpack("4H", file.read(8))
@@ -526,15 +526,21 @@ class Room:
                 self.tileModes.append(TileMode.FLAT)
 
 
-        # we skip unknown section
-        print("SubSection03  len("+repr(self.lenSubSection03)+") at : "+repr(file.tell()))
-        # for i in range(0, self.roomX * self.roomY):
-        #   file.read(4)
-        file.seek(ptrEndCollision+self.lenSubSection03)
+        # Tile properties Section
+        print("TilePropertiesSection len("+repr(self.lenTilePropertiesSection)+") at : "+repr("{0:8X}".format(file.tell())))
+        for i in range(0, self.roomY * self.roomX):
+            unk = struct.unpack("4B", file.read(4))
+            #print("id:"+repr(i)+" -> "+repr(unk))
+            # often 00-14-00-D8 or 00-00-00-00
+            # unk[0] is maybe a floor climb flag, 0 or 1
+            # unk[1] is maybe a floor flag, 20 : not walkable, 0 walkable, 64 door, 212 : door (MAP010.MPD)
+            # unk[2] is maybe a ceil flag, 0 : most of the time, 16 : related with doors, 128-129
+            # unk[3] is maybe another ceil flag, 0 : no ceil, 216-248 : high ceil, 16 : ceil at 4 units, 32 : ceil at 8, 80 : ceil at 20 ?
+
+        file.seek(ptrEndCollision+self.lenTilePropertiesSection)
 
         # Door section (maybe more a warp section)
-        print("Room Door Section  len("+repr(self.lenDoorSection)+") at : "+repr(file.tell()))
-        # we must be in room doors section
+        print("Room Door Section  len("+repr(self.lenDoorSection)+") at : "+repr("{0:8X}".format(file.tell())))
         numDoors = round(self.lenDoorSection /0x0C)
         if self.lenDoorSection >= 0x0C:
             for i in range(0, numDoors):
@@ -547,76 +553,207 @@ class Room:
                 tileId = round(rawTileId / 32) * self.roomX + (rawTileId % 32)
                 print("MPD door : "+" destZone : "+repr(destZone)+", destRoom : "+repr(destRoom)+" doorId : "+repr(doorId)+" rawTileId : "+repr(rawTileId)+" tileId : "+repr(tileId)+" dunk : "+repr(dunk))
         
-        print("LightingSection  len("+repr(self.lenLightingSection)+") at : "+repr(file.tell()))
-        file.seek(self.lenLightingSection, 1)
+        print("LightingSection  len("+repr(self.lenLightingSection)+") at : "+repr("{0:8X}".format(file.tell())))
+        endLight = file.tell() + self.lenLightingSection
+        # 32 bytes blocks + 12 bytes
+        # strange thing :
+        # the first light is omited in the SLES-02755.BIN
+        # so the light section in MAP009.MPD len(1068) will become len(1036) in the BIN
+        # note that cols[4] in the first light in the .MPD gives us the lights number so its maybe not really a light
+        numLights = math.floor(self.lenLightingSection / 32)
+        for i in range(0, numLights):
+            # http://www.psxdev.net/forum/viewtopic.php?f=51&t=3383
+            cols = struct.unpack("12B", file.read(12))
+            matrix = struct.unpack("10H", file.read(20))
+        ambientColor = struct.unpack("12B", file.read(12))
         
-        print("SubSection06  len("+repr(self.lenSubSection06)+") at : "+repr(file.tell()))
-        # looks like colors ?
+        file.seek(endLight)
+        
+        print("SubSection06  len("+repr(self.lenSubSection06)+") at : "+repr("{0:8X}".format(file.tell())))
+        # often starts with lots of 00
+        # black screen when filled with 00
+        # len -> 1328 in MAP009.MPD longer in the BIN -> 1632
+        #
         file.seek(self.lenSubSection06, 1)
         
-        print("SubSection07  len("+repr(self.lenSubSection07)+") at : "+repr(file.tell()))
-        # 256 * 0x00 in MAP014.MPD
+        print("SubSection07  len("+repr(self.lenSubSection07)+") at : "+repr("{0:8X}".format(file.tell())))
+        # 256 * 0x00 in maps 10, 14, 19, 20,... 148
+        # no noticable effect on change
         file.seek(self.lenSubSection07, 1)
         
-        print("SubSection08  len("+repr(self.lenSubSection08)+") at : "+repr(file.tell()))
+        print("SubSection08  len("+repr(self.lenSubSection08)+") at : "+repr("{0:8X}".format(file.tell())))
         file.seek(self.lenSubSection08, 1)
         
-        print("SubSection09  len("+repr(self.lenSubSection09)+") at : "+repr(file.tell()))
+        print("Trap Section  len("+repr(self.lenTrapSection)+") at : "+repr("{0:8X}".format(file.tell())))
         # 0100 0800 0000 1000 01FF 0200 in MAP014.MPD
-        file.seek(self.lenSubSection09, 1)
+        # Xco  yco       Skill
+        # http://datacrystal.romhacking.net/wiki/Vagrant_Story:skills_list
+        numTraps = round(self.lenTrapSection / 0x0C)
+        if self.lenTrapSection >= 0x0C:
+            for i in range(0, numTraps):
+                coords =  struct.unpack("2H", file.read(4))
+                pad = struct.unpack("H", file.read(2))[0] # padding, always 0x0000
+                skill = struct.unpack("H", file.read(2))[0]
+                tunk = struct.unpack("4B", file.read(4))
+
+        #file.seek(self.lenTrapSection, 1)
         
-        print("SubSection0A  len("+repr(self.lenSubSection0A)+") at : "+repr(file.tell()))
+        print("SubSection0A  len("+repr(self.lenSubSection0A)+") at : "+repr("{0:8X}".format(file.tell())))
+        # 20 byte blocks
+        # 0800 0D00 0000 0000 0000 E700 0000 0000 FFFF 0000 in MAP148.MPD
+
+        # 0300 1000 0000 0000 0000 E700 0000 0000 FFFF 0000
+        # 0300 0000 0000 0000 0005 E700 0000 0000 FFFF 0000  in MAP010.MPD
         file.seek(self.lenSubSection0A, 1)
         
-        print("SubSection0B  len("+repr(self.lenSubSection0B)+") at : "+repr(file.tell()))
+        print("SubSection0B  len("+repr(self.lenSubSection0B)+") at : "+repr("{0:8X}".format(file.tell())))
         # 0000 0000 0000 0000 0000 0000 0000 0000 
         # 0000 0000 0000 0000 0000 0000 0000 0000
         # 0000 0000 0000 0000 0000 0000 0100 0000
         # 0000 0000 0000 0000 0000 0000 0000 0000
         # 0000 0000 0000 0000 0000 0000 0000 0000
-        # 0100 FFFF FFFF 0900  in MAP014.MPD
+        # 0100 FFFF FFFF 0900      in MAP014.MPD
+
+        # B0E0 E400 7090 B400 0000 0000 0000 0000 
+        # 0000 0000 0000 0000 0000 0000 0000 0000 
+        # 0000 0000 0000 0000 0000 0000 0000 0000 
+        # 0000 0000 0000 0000 0000 0000 0000 0000 
+        # 0000 0000 0000 0000 0000 0000 0000 0000
+        # 1C00 FFFF FFFF 0000      in MAP148.MPD
+
+        # 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100FFFFFFFF0B00
+        # FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+
+        # no noticable effect on change
+
         file.seek(self.lenSubSection0B, 1)
         
-        print("TextureEffectsSection  len("+repr(self.lenTextureEffectsSection)+") at : "+repr(file.tell()))
-        # 96 + 16 * 36 ?
+        print("TextureEffectsSection  len("+repr(self.lenTextureEffectsSection)+") at : "+repr("{0:8X}".format(file.tell())))
+
+        # affect flame animations not position or color
+
+        #                type
+        # in MAP148.MPD
+        # 0400 0000 0001 0601 FEFF FFFF 0200 0000 0200 0000 0004 0000 0004 0000 0000 0000 0000 0000
+        # DC10 0000 0100 0201 A040 2020 A043 1F0F 0001 0000 000E 1E00 0E00 0E00 A000 4000
+        # 0411 0000 0100 0201 A040 2020 A043 1F0F 0001 0000 000E 1E00 0E00 0E00 A000 4000
+        # B410 0000 0100 0201 A040 2020 A043 1F0F 0001 0000 000E 1E00 0E00 0E00 A000 4000
+        # 0012 1F08 0100 0100 0100 0000 4002 8000 2000 4000
+
+        # in MAP009.MPD (must have 4 effects : 2 candles, 1 exit arrow, 1 fire)
+        #  ?   ite  numsprites             x h  y    w
+        # 0101 03   04 0100 0101 0000 0000 A801 6000 0200 1000  // candles
+        # 0102 07   08 0100 0101 0000 0000 8001 A000 0400 2000  // fire
+        #                type  speed   tex co  dest co   ?  transl   
+        # 3CC9 0000 0100 02    01       A040   2020    A041 1F0F    0001 0100 000E 1E00 0E00 0E00 A000 4000 // exit arrow
+        # experiences :
+        # 010103040100010100000000A8016000020010000102070801000101000000008001A000040020003CC9000001000201A0402020A0411F0F00010100000E1E000E000E00A0004000 // untouched
+        # 010103040100010100000000A8016000020010000000070801000101000000008001A000040020003CC9000001000201A0402020A0411F0F00010100000E1E000E000E00A0004000
+
+
+        # in MAP010.MPD
+        # 8400 0000 0001 0601 0300 0000 FEFF FFFF 0200 0000 000C 0000 000C 0000 0000 0000 0000 0000
+        # 0103 0304 0100 0101 0000 0000 A801 6000 0200 1000
+        # 0104 0708 0100 0101 0000 0000 8001 A000 0400 2000
+        # 8C09 0000 0100 0201 A040 2020 A04C 1F0F 0001 0100 000E 1E00 0E00 0E00 A000 4000
+        # 2C77 0000 0100 0201 A040 2020 A04C 1F0F 0001 0100 000E 1E00 0E00 0E00 A000 4000 
+        # 4409 0000 0001 0601 FEFF FFFF 0200 0000 0200 0000 0004 0000 0004 0000 0000 0000 0000 0000
+
+        # in MAP011.MPD
+        # 0401 0000 0001 0601 0000 0000 FEFF FFFF 0200 0000 0000 0000 000C 0000 0000 0000 0000 0000
+        # 4401 0000 0001 0601 0000 0000 0200 0000 0200 0000 0000 0000 0004 0000 0000 0000 0000 0000 
+        # 0002 0304 0100 0101 0000 0000 A801 6000 0200 1000
+        # 0001 0708 0100 0101 0000 0000 8001 A000 0400 2000
+        # DC0B 0000 0100 0201 A040 2020 A04E 1F0F 0001 0000 000E 1E00 0E00 0E00 A000 4000
+        # 8C0B 0000 0100 0201 A040 2020 A04E 1F0F 0001 0000 000E 1E00 0E00 0E00 A000 4000
+
+        # in MAP034.MPD
+        # 8401 0000 0001 0601 0000 0000 FEFF FFFF 0200 0000 0000 0000 000C 0000 0000 0000 0000 0000
+        # C401 0000 0001 0601 0000 0000 FEFF FFFF 0200 0000 0000 0000 000C 0000 0000 0000 0000 0000
+        # 0402 0000 0001 0601 0000 0000 0200 0000 0200 0000 0000 0000 0004 0000 0000 0000 0000 0000
+        # 0101 0708 0100 0101 0000 0000 8001 A000 0400 2000 
+        # AC0A 0000 0100 0201 A040 2020 A04C 1F0F 0001 0100 1E00 0E00 0E0E 0000 A000 4000 
+        # 0C0A 0000 0100 0201 A040 2020 A04C 1F0F 0001 0100 1E00 0E00 0E0E 0000 A000 4000
+        # 5C0A 0000 0100 0201 A040 2020 A04C 1F0F 0001 0100 1E00 0E00 0E0E 0000 A000 4000
+
+        # in MAP027.MPD ( 1 lantern, 1 candle, 1 save, 1 chest, 2 exits)
+        # 8400 0000 0001 0603 0000 0000 FEFF FFFF 0300 0000 0000 0000 000E 0000 0000 0000 0000 0000
+        # 0103 0304 0100 0101 0000 0000 A801 6000 0200 1000 
+        # 0104 0708 0100 0101 0000 0000 8001 A000 0400 2000
+        # 1C11 0000 0100 0201 A040 2020 A14E 1F0F 0001 0100 000E 1E00 0E00 0E00 A100 5100 
+        # FC10 0000 0100 0201 A040 2020 A04F 1F0F 0001 0100 000E 1E00 0E00 0E00 A000 4000
+        # save
+        # 2C0A 0000 0100 0201 8040 2040 9057 0F1F 0001 0100 0000 0E0E 1E00 1E00 9000 4000
+        # 540A 0000 0100 0201 8040 2040 9057 0F1F 0001 0100 0000 0E0E 1E00 1E00 9000 4000
+        # 7C0A 0000 0100 0201 8040 2040 8057 111F 0001 0100 0000 1010 1E00 1E00 8000 4000
+        # A40A 0000 0100 0201 8040 2040 8057 111F 0001 0100 0000 1010 1E00 1E00 8000 4000
+        # 940B 0000 0100 0201 8040 2040 9057 0F1F 0001 0100 0000 0E0E 1E00 1E00 9000 4000
+        # 6C0B 0000 0100 0201 8040 2040 9057 0F1F 0001 0100 0000 0E0E 1E00 1E00 9000 4000
+        # 440B 0000 0100 0201 8040 2040 8057 111F 0001 0100 0000 1010 1E00 1E00 8000 4000
+        # 8C09 0000 0100 0201 8040 2040 8057 111F 0001 0100 0000 1010 1E00 1E00 8000 4000
+        # 040A 0000 0100 0201 8040 2040 9057 0F1F 0001 0100 0000 0E0E 1E00 1E00 9000 4000
+        # DC09 0000 0100 0201 8040 2040 9057 0F1F 0001 0100 0000 0E0E 1E00 1E00 9000 4000
+        # F40A 0000 0100 0201 8040 2040 8057 111F 0001 0100 0000 1010 1E00 1E00 8000 4000
+        # CC0A 0000 0100 0201 8040 2040 8057 111F 0001 0100 0000 1010 1E00 1E00 8000 4000
+        # B409 0000 0100 0201 8040 2040 9057 0F1F 0001 0100 0000 0E0E 1E00 1E00 9000 4000
+        # 3C09 0000 0100 0201 8040 2040 9057 0F1F 0001 0100 0000 0E0E 1E00 1E00 9000 4000
+        # 1C0B 0000 0100 0201 8040 2040 8057 111F 0001 0100 0000 1010 1E00 1E00 8000 4000
+        # 6409 0000 0100 0201 8040 2040 8057 111F 0001 0100 0000 1010 1E00 1E00 8000 4000
         file.seek(self.lenTextureEffectsSection, 1)
         
-        print("SubSection0D  len("+repr(self.lenSubSection0D)+") at : "+repr(file.tell()))
+        print("SubSection0D  len("+repr(self.lenSubSection0D)+") at : "+repr("{0:8X}".format(file.tell())))
+        # no noticable effect when full of 00
+        # black screen when filled with FF
+        # 4bytes blocks ?
+        # 01000000FF00000008000400000000000800040000000000040002000000000001000000FF00000008000A000000000008000A0000000000040002000000000002000000020300001C000800701D000040EDFFFFB0070000000000000000000000000000040002000000000002000000020300001C000800701D000040EDFFFFB007000000000000000000000000000014000100000040010000000000000000000000000800050000800100140001000000B0FF000000000000000000000000080005000500020014000100000050000000000000000000000000000800050000800100040002000000000001000100FF0000000400020000000000
+        # 01000000FF00000008000400000000000800040000000000040002000000000001000000FF00000008000A000000000008000A0000000000040002000000000002000000020300001C000800FFFF000040EDFFFFB0070000000000000000000000000000040002000000000002000000020300001C000800701D000040EDFFFFB007000000000000000000000000000014000100000040010000000000000000000000000800050000800100140001000000B0FF000000000000000000000000080005000500020014000100000050000000000000000000000000000800050000800100040002000000000001000100FF0000000400020000000000
         file.seek(self.lenSubSection0D, 1)
         
-        print("SubSection0E  len("+repr(self.lenSubSection0E)+") at : "+repr(file.tell()))
+        print("SubSection0E  len("+repr(self.lenSubSection0E)+") at : "+repr("{0:8X}".format(file.tell())))
+        # black screen when nulled
         file.seek(self.lenSubSection0E, 1)
         
-        print("SubSection0F  len("+repr(self.lenSubSection0F)+") at : "+repr(file.tell()))
-        # 32 bytes header + x*8 bytes blocks
-        file.seek(self.lenSubSection0F, 1)
+        print("MiniMapSection  len("+repr(self.lenMiniMapSection)+") at : "+repr("{0:8X}".format(file.tell())))
+        endMiniMap = file.tell() + self.lenMiniMapSection
+        self.arm = ARM.ARM()
+        self.arm.filesize = self.lenMiniMapSection
+        self.arm.parse(file)
+        file.seek(endMiniMap)
         
-        print("SubSection10  len("+repr(self.lenSubSection10)+") at : "+repr(file.tell()))
+        print("SubSection10  len("+repr(self.lenSubSection10)+") at : "+repr("{0:8X}".format(file.tell())))
         file.seek(self.lenSubSection10, 1)
         
-        print("SubSection11  len("+repr(self.lenSubSection11)+") at : "+repr(file.tell()))
+        print("SubSection11  len("+repr(self.lenSubSection11)+") at : "+repr("{0:8X}".format(file.tell())))
         file.seek(self.lenSubSection11, 1)
         
-        print("SubSection12  len("+repr(self.lenSubSection12)+") at : "+repr(file.tell()))
+
+        # 12 or 13 is maybe floating stones section
+        print("SubSection12  len("+repr(self.lenSubSection12)+") at : "+repr("{0:8X}".format(file.tell())))
         file.seek(self.lenSubSection12, 1)
         
-        print("SubSection13  len("+repr(self.lenSubSection13)+") at : "+repr(file.tell()))
+        # chest section or timed room section
+        print("SubSection13  len("+repr(self.lenSubSection13)+") at : "+repr("{0:8X}".format(file.tell())))
         file.seek(self.lenSubSection13, 1)
         
-        print("AKAOSubSection  len("+repr(self.lenAKAOSubSection)+") at : "+repr(file.tell()))
+        print("AKAOSubSection  len("+repr(self.lenAKAOSubSection)+") at : "+repr("{0:8X}".format(file.tell())))
         file.seek(self.lenAKAOSubSection, 1)
         
-        print("SubSection15  len("+repr(self.lenSubSection15)+") at : "+repr(file.tell()))
+        print("SubSection15  len("+repr(self.lenSubSection15)+") at : "+repr("{0:8X}".format(file.tell())))
         file.seek(self.lenSubSection15, 1)
         
-        print("SubSection16  len("+repr(self.lenSubSection16)+") at : "+repr(file.tell()))
+        print("SubSection16  len("+repr(self.lenSubSection16)+") at : "+repr("{0:8X}".format(file.tell())))
         file.seek(self.lenSubSection16, 1)
         
-        print("SubSection17  len("+repr(self.lenSubSection17)+") at : "+repr(file.tell()))
+        print("SubSection17  len("+repr(self.lenSubSection17)+") at : "+repr("{0:8X}".format(file.tell())))
         file.seek(self.lenSubSection17, 1)
         
-        print("SubSection18  len("+repr(self.lenSubSection18)+") at : "+repr(file.tell()))
-        file.seek(self.lenSubSection18, 1)
+        print("CameraAreaSection  len("+repr(self.lenCameraAreaSection)+") at : "+repr("{0:8X}".format(file.tell())))
+        # SubSection18 is camera area in tile
+        # 0000 0000 0700 1200 -> meens the camera can move 7 tiles in X and 18 tiles in Y
+        # values are close to roomX & roomY
+        ints =  struct.unpack("4H", file.read(8))
+        camX = ints[2]
+        camY = ints[3]
 
 
                         

@@ -1,8 +1,8 @@
 bl_info = {
     "name": "Vagrant Story file formats Add-on",
-    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND).",
+    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 0),
+    "version": (2, 1),
     "blender": (2, 92, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
@@ -77,7 +77,8 @@ def BlenderImport(operator, context, filepath):
     p = P()
     # we read datas from a file
     p.width = len(effect.FBTs)*128
-    p.numPalettes = effect.FBC.numPalettes
+    if effect.FBC != None:
+        p.numPalettes = effect.FBC.numPalettes
     p.loadFromFile(filepath)
     print(p)
     effect.P = p
@@ -95,53 +96,54 @@ def BlenderImport(operator, context, filepath):
     bsdf.inputs["Specular"].default_value = 0
     bsdf.inputs["Metallic"].default_value = 0
 
-    pixmap = []
-    h = effect.FBTs[0].height * effect.FBC.numPalettes
-    w = effect.FBTs[0].width
+    if effect.FBC != None:
+        pixmap = []
+        h = effect.FBTs[0].height * effect.FBC.numPalettes    
+        w = effect.FBTs[0].width
 
-    for i in range(0, h):
-        for t in range(0, len(effect.FBTs)):
-            for j in range(0, w):
-                pixmap.extend(effect.FBTs[t].texture[i*w+j].toFloat())
+        for i in range(0, h):
+            for t in range(0, len(effect.FBTs)):
+                for j in range(0, w):
+                    pixmap.extend(effect.FBTs[t].texture[i*w+j].toFloat())
 
-    texImage = mat.node_tree.nodes.new("ShaderNodeTexImage")
-    texImage.image = bpy.data.images.new(bpy.path.basename(filepath)+"_Sprite_Sheet", effect.FBTs[0].width * len(effect.FBTs), h)
-    texImage.image.pixels = pixmap
-    #texImage.interpolation = "Closest"  # texture filter
-    mat.node_tree.links.new(bsdf.inputs["Base Color"], texImage.outputs["Color"])
-    mat.node_tree.links.new(bsdf.inputs["Alpha"], texImage.outputs["Alpha"])
-    plane.active_material = mat
+        texImage = mat.node_tree.nodes.new("ShaderNodeTexImage")
+        texImage.image = bpy.data.images.new(bpy.path.basename(filepath)+"_Sprite_Sheet", effect.FBTs[0].width * len(effect.FBTs), h)
+        texImage.image.pixels = pixmap
+        #texImage.interpolation = "Closest"  # texture filter
+        mat.node_tree.links.new(bsdf.inputs["Base Color"], texImage.outputs["Color"])
+        mat.node_tree.links.new(bsdf.inputs["Alpha"], texImage.outputs["Alpha"])
+        plane.active_material = mat
 
-    mesh = plane.data
-    action = bpy.data.actions.new("MeshAnimation")
+        mesh = plane.data
+        action = bpy.data.actions.new("MeshAnimation")
 
-    mesh.animation_data_create()
-    mesh.animation_data.action = action
+        mesh.animation_data_create()
+        mesh.animation_data.action = action
 
-    uvlayer = mesh.uv_layers.active
+        uvlayer = mesh.uv_layers.active
 
-    data_path = "vertices[%d].co"
-    uv_datas_path = "uv_layers.active.data[%d].uv"
+        data_path = "vertices[%d].co"
+        uv_datas_path = "uv_layers.active.data[%d].uv"
 
-    for t in range(0, len(p.frames)):
-        frame = p.frames[t]
-        xdec = frame.textureId * 128
+        for t in range(0, len(p.frames)):
+            frame = p.frames[t]
+            xdec = frame.textureId * 128
 
-        for v in mesh.vertices:
-            fcurves = [action.fcurves.find(data_path % v.index, index= i) for i in range(3)]
-            if fcurves == [None, None, None]:
-                fcurves = [action.fcurves.new(data_path % v.index, index =  i) for i in range(3)]
-            co_rest = v.co
-            sprite_co = (frame.v_co[v.index][0]/100, frame.v_co[v.index][1]/100, 0.0)
-            insert_keyframe(fcurves, t, sprite_co)
-            
-        for face in mesh.polygons:
-            for vert_idx, loop_idx in zip(face.vertices, face.loop_indices):
-                #uvlayer.data[loop_idx].uv = (xdec + frame.uvs[loop_idx][0], frame.uvs[loop_idx][1])
-                uv_curve = [action.fcurves.find(uv_datas_path % loop_idx, index= i) for i in range(2)]
-                if uv_curve == [None, None]:
-                    uv_curve = [action.fcurves.new(uv_datas_path % loop_idx, index= i) for i in range(2)]
-                insert_keyframe(uv_curve, t, (xdec + frame.uvs[loop_idx][0], frame.uvs[loop_idx][1]))
+            for v in mesh.vertices:
+                fcurves = [action.fcurves.find(data_path % v.index, index= i) for i in range(3)]
+                if fcurves == [None, None, None]:
+                    fcurves = [action.fcurves.new(data_path % v.index, index =  i) for i in range(3)]
+                co_rest = v.co
+                sprite_co = (frame.v_co[v.index][0]/100, frame.v_co[v.index][1]/100, 0.0)
+                insert_keyframe(fcurves, t, sprite_co)
+                
+            for face in mesh.polygons:
+                for vert_idx, loop_idx in zip(face.vertices, face.loop_indices):
+                    #uvlayer.data[loop_idx].uv = (xdec + frame.uvs[loop_idx][0], frame.uvs[loop_idx][1])
+                    uv_curve = [action.fcurves.find(uv_datas_path % loop_idx, index= i) for i in range(2)]
+                    if uv_curve == [None, None]:
+                        uv_curve = [action.fcurves.new(uv_datas_path % loop_idx, index= i) for i in range(2)]
+                    insert_keyframe(uv_curve, t, (xdec + frame.uvs[loop_idx][0], frame.uvs[loop_idx][1]))
 
 def insert_keyframe(fcurves, frame, values):
     for fcu, val in zip(fcurves, values):
@@ -166,7 +168,7 @@ class P:
         self.framePtr = 0
         self.n5 = 0
         self.n6 = 0
-        self.p = 0
+        self.p = 0 # padding ?
         self.numPalettes = 0
     def __repr__(self):
         return (
@@ -274,7 +276,7 @@ class FBT:
 
 class EffectFrame:
     def __init__(self):
-        self.tex = 0 # often 1, but could be 2, 4, 5, 9 in 137.P
+        self.tex = 0 # unknown but often 1, but could be 2, 4, 5, 9 in 137.P
         self.id = 0
         self.head = []
         self.rect = []

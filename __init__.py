@@ -1,15 +1,15 @@
 bl_info = {
     "name": "Vagrant Story file formats Add-on",
-    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND).",
+    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 0),
+    "version": (2, 1),
     "blender": (2, 92, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
 
 import bpy
-from . import WEP, SHP, SEQ, MPD, ZND, ZUD, TIM, EFFECT, color
+from . import WEP, SHP, SEQ, MPD, ZND, ZUD, TIM, ARM, EFFECT, color
 
 # https://docs.blender.org/api/current/bpy.props.html
 
@@ -47,6 +47,7 @@ classes = (
     ZUD.Import,
     MPD.Import,
     EFFECT.Import,
+    ARM.Import,
     MaterialPalette,
     BoneDatas,
     MeshDatas
@@ -77,6 +78,7 @@ def menu_func_import(self, context):
     self.layout.operator(MPD.Import.bl_idname, text="Vagrant Story Map Datas (.MPD)")
     #self.layout.operator(ImportZND.bl_idname,text="Vagrant Story Zone Datas(.ZND)")
     self.layout.operator(EFFECT.Import.bl_idname, text="Vagrant Story Effect (.P)")
+    self.layout.operator(ARM.Import.bl_idname, text="Vagrant Story Maps (.ARM)")
 
 def menu_func_export(self, context):
     self.layout.operator(WEP.Export.bl_idname, text="Vagrant Story Weapon (.WEP)")

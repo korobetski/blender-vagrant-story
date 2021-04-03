@@ -1,8 +1,8 @@
 bl_info = {
     "name": "Vagrant Story file formats Add-on",
-    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND).",
+    "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 0),
+    "version": (2, 1),
     "blender": (2, 92, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
@@ -92,10 +92,8 @@ def BlenderImport(operator, context, filepath, bool_anim_trans = False):
     # selecting armature
     shpObj.parent.name = bpy.path.display_name(filepath)
     shpObj.parent.select_set(True)
-    bpy.context.view_layer.objects.active = shpObj.parent
-
-    # maybe we should considere invert Y and Z axis when building bones and vertices
-    #shpObj.parent.rotation_euler = (-math.pi / 2, 0, 0)  # height to Z+
+    bpy.context.view_layer.objects.active = shpObj.parentIndex
+    
     return {"FINISHED"}
 
 class SHP:
