@@ -4,7 +4,7 @@ Blender addon for importing / exporting Vagrant Story (Squaresoft 2000) file for
 
 Vagrant Story files formats are mostly explained here : http://datacrystal.romhacking.net/wiki/Vagrant_Story:File_formats
 
-<img src="https://github.com/korobetski/blender-vagrant-story/raw/master/zud_anim.png"/>
+<img src="https://github.com/korobetski/blender-vagrant-story/raw/refactor/zud_anim.png"/>
 
 # Purpose :
 
@@ -51,9 +51,9 @@ in Addons window clic install and choose the last release archive file downloade
 
 https://discord.gg/BRgsK77zkf
 
-<img src="https://github.com/korobetski/blender-vagrant-story/raw/master/crumbling_market.png"/>
+<img src="https://github.com/korobetski/blender-vagrant-story/raw/refactor/crumbling_market.png"/>
 
-<img src="https://github.com/korobetski/blender-vagrant-story/raw/master/export.png"/>
+<img src="https://github.com/korobetski/blender-vagrant-story/raw/refactor/export.png"/>
 
-<img src="https://github.com/korobetski/blender-vagrant-story/raw/master/uv_map_addon_win.png"/>
+<img src="https://github.com/korobetski/blender-vagrant-story/raw/refactor/uv_map_addon_win.png"/>
 
