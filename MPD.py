@@ -102,15 +102,28 @@ class MPD:
             # building texture and material from ZND and texture ID + clut ID
             mat = bpy.data.materials.new(name=str(ref+"_MAT"))
             mat.use_nodes = True
-            mat.blend_method = "CLIP"  # to handle alpha cutout
-            mat.use_backface_culling = True
+            mat.blend_method = "HASHED"  # to handle alpha cutout enum in [‘OPAQUE’, ‘CLIP’, ‘HASHED’, ‘BLEND’], default ‘OPAQUE’
+            translucent = False # define alpha with the color grey scale
+            
+            for i in range(0, len(self.room.groups)):
+                if self.room.groups[i].materialRefs.__contains__(ref):
+                    if self.room.groups[i].materialSided[self.room.groups[i].materialRefs.index(ref)] == True:
+                        # to handle double sided faces
+                        mat.use_backface_culling = False
+                    else:
+                        mat.use_backface_culling = True
+                    if self.room.groups[i].materialTrans[self.room.groups[i].materialRefs.index(ref)] == True:
+                        translucent = True
+                    else:
+                        translucent = False
+
             # maybe i should consider using a simpler material... VS doesn't need a PBR Material :D
             bsdf = mat.node_tree.nodes["Principled BSDF"]
             bsdf.inputs["Specular"].default_value = 0
             bsdf.inputs["Metallic"].default_value = 0
             texImage = mat.node_tree.nodes.new("ShaderNodeTexImage")
             texImage.image = bpy.data.images.new(str(ref+"_TEX"), 256, 256)
-            texImage.image.pixels = znd.getPixels(ref)
+            texImage.image.pixels = znd.getPixels(ref, translucent)
             texImage.interpolation = "Closest"  # texture filter
             vc = mat.node_tree.nodes.new("ShaderNodeVertexColor")
             # https://docs.blender.org/manual/fr/2.91/render/shader_nodes/color/mix.html
@@ -396,8 +409,8 @@ class Room:
         self.lenMiniMapSection = 0
         self.lenSubSection10 = 0
         self.lenSubSection11 = 0
-        self.lenSubSection12 = 0
-        self.lenSubSection13 = 0
+        self.lenFloatingStoneSection = 0
+        self.lenChestInteractionSection = 0
         self.lenAKAOSubSection = 0
         self.lenSubSection15 = 0
         self.lenSubSection16 = 0
@@ -406,6 +419,7 @@ class Room:
         self.numGroups = 0
         self.groups = []
         self.materialRefs = []
+        self.materialSided = []
         self.blender = BlenderDatas()
         self.roomX = 0
         self.roomY = 0
@@ -433,8 +447,8 @@ class Room:
             self.lenMiniMapSection,
             self.lenSubSection10,
             self.lenSubSection11,
-            self.lenSubSection12,
-            self.lenSubSection13,
+            self.lenFloatingStoneSection,
+            self.lenChestInteractionSection,
             self.lenAKAOSubSection,
             self.lenSubSection15,
             self.lenSubSection16,
@@ -444,12 +458,13 @@ class Room:
 
         # Geometry Section  
         print("Geometry Section  len("+repr(self.lenGeometrySection)+") at : "+repr("{0:8X}".format(file.tell())))
-
         if self.lenGeometrySection > 4:
             # GeometrySection (Polygon groups)
             self.numGroups = struct.unpack("I", file.read(4))[0]
             self.groups = []
             self.materialRefs = []
+            
+            print("Room Groups at : "+repr("{0:8X}".format(file.tell())))
             for i in range(0, self.numGroups):
                 group = GroupSection.MDPGroup()
                 group.name = "Group "+str(i)
@@ -457,8 +472,15 @@ class Room:
                 self.groups.append(group)
 
             for i in range(0, self.numGroups):
+                print("Room Faces of Group "+repr(i)+" at : "+repr("{0:8X}".format(file.tell())))
                 group = self.groups[i]
                 group.feedFaces(file)
+                #print(group)
+                #    tris     quads   x1   y1   z1   x y  z x  y z  R G  B ty
+                # 0000 0000 0100 0000 F8FF EEFF 0100 0200 0000 0400 4D4D 4D3E 4D4D 4DA0 9999 996E A060 B638 A660 2600 0204 00A6 9999 996E
+
+                # 0000000001000000F8FFEEFF01000200000004004D4D4D3E4D4D4DA09999996EA060B638A6602600020400A69999996E
+                # 0000000001000000F8FFEEFF01000200000004004D4D4D404D4D4DA09999996EA060B638A6602600020400A69999996E
 
                 # we gather all needed material refs
                 for ref in group.materialRefs:
@@ -541,17 +563,19 @@ class Room:
 
         # Door section (maybe more a warp section)
         print("Room Door Section  len("+repr(self.lenDoorSection)+") at : "+repr("{0:8X}".format(file.tell())))
+        # 090003000003003C02000000090343010043000801000000
+        # 090003000003004302000000090343010043000801000000
         numDoors = round(self.lenDoorSection /0x0C)
         if self.lenDoorSection >= 0x0C:
             for i in range(0, numDoors):
                 destZone, destRoom = struct.unpack("2B", file.read(2))
                 rawTileId = struct.unpack("H", file.read(2))[0]
-                dunk = struct.unpack("4B", file.read(4))
+                destination = struct.unpack("2H", file.read(4)) # Y-X
                 doorId = struct.unpack("I", file.read(4))[0]
                 # the door section seems to use a grid of 32x32
                 # so we need to adapt tileId to the current MPD room grid to figure where the door must be
                 tileId = round(rawTileId / 32) * self.roomX + (rawTileId % 32)
-                print("MPD door : "+" destZone : "+repr(destZone)+", destRoom : "+repr(destRoom)+" doorId : "+repr(doorId)+" rawTileId : "+repr(rawTileId)+" tileId : "+repr(tileId)+" dunk : "+repr(dunk))
+                print("MPD door : "+" destZone : "+repr(destZone)+", destRoom : "+repr(destRoom)+" doorId : "+repr(doorId)+" rawTileId : "+repr(rawTileId)+" tileId : "+repr(tileId)+" destination : "+repr(destination))
         
         print("LightingSection  len("+repr(self.lenLightingSection)+") at : "+repr("{0:8X}".format(file.tell())))
         endLight = file.tell() + self.lenLightingSection
@@ -571,8 +595,10 @@ class Room:
         
         print("SubSection06  len("+repr(self.lenSubSection06)+") at : "+repr("{0:8X}".format(file.tell())))
         # often starts with lots of 00
-        # black screen when filled with 00
+        # ????
         # len -> 1328 in MAP009.MPD longer in the BIN -> 1632
+        # 100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060A0000FFFFFFEFFFFFFFFFFFFFC6FFFFFFFFE70F828183E33FFA06000000E08F0302000000E00E0000000000E00E0000000020F01E0800000060EFFF3C182830F8FEFFFFFF6CFFFFFFFFFFFFFEFFFFFFFFFFFFFEFFFFFF
+        # ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
         #
         file.seek(self.lenSubSection06, 1)
         
@@ -585,6 +611,8 @@ class Room:
         file.seek(self.lenSubSection08, 1)
         
         print("Trap Section  len("+repr(self.lenTrapSection)+") at : "+repr("{0:8X}".format(file.tell())))
+        # 050003000000100001FF0100
+        # 05000300000010000AFF0100
         # 0100 0800 0000 1000 01FF 0200 in MAP014.MPD
         # Xco  yco       Skill
         # http://datacrystal.romhacking.net/wiki/Vagrant_Story:skills_list
@@ -631,6 +659,8 @@ class Room:
         print("TextureEffectsSection  len("+repr(self.lenTextureEffectsSection)+") at : "+repr("{0:8X}".format(file.tell())))
 
         # affect flame animations not position or color
+        # type 01 is a sprite sheet animation
+        # type 02 is a texture translation animation
 
         #                type
         # in MAP148.MPD
@@ -704,10 +734,31 @@ class Room:
         print("SubSection0D  len("+repr(self.lenSubSection0D)+") at : "+repr("{0:8X}".format(file.tell())))
         # no noticable effect when full of 00
         # black screen when filled with FF
-        # 4bytes blocks ?
-        # 01000000FF00000008000400000000000800040000000000040002000000000001000000FF00000008000A000000000008000A0000000000040002000000000002000000020300001C000800701D000040EDFFFFB0070000000000000000000000000000040002000000000002000000020300001C000800701D000040EDFFFFB007000000000000000000000000000014000100000040010000000000000000000000000800050000800100140001000000B0FF000000000000000000000000080005000500020014000100000050000000000000000000000000000800050000800100040002000000000001000100FF0000000400020000000000
-        # 01000000FF00000008000400000000000800040000000000040002000000000001000000FF00000008000A000000000008000A0000000000040002000000000002000000020300001C000800FFFF000040EDFFFFB0070000000000000000000000000000040002000000000002000000020300001C000800701D000040EDFFFFB007000000000000000000000000000014000100000040010000000000000000000000000800050000800100140001000000B0FF000000000000000000000000080005000500020014000100000050000000000000000000000000000800050000800100040002000000000001000100FF0000000400020000000000
-        file.seek(self.lenSubSection0D, 1)
+        # dunno what it can be
+        # 0100 0100 FF00 0000
+        # 0800 0600 0000 0100 0400 0200 0000 0000 0100 0000 0200 0000 1C00 0800 0064 0000 00E4 FFFF 0064 0000 0000 0000 0000 0000 0000 0000 1400 0100 4000 0000 C0FF 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0400 0200 0000 0000 0100 0000 0200 0000 1C00 0800 0084 0000 00E4 FFFF 0044 0000 0000 0000 0000 0000 0000 0000 1400 0100 C0FF 0000 4000 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0400 0200 0000 0000 0100 0000 0200 0000 1C00 0800 0064 0000 00E4 FFFF 0064 0000 0000 0000 0000 0000 0000 0000 1400 0100 4000 0000 C0FF 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0800 0500 3C00 0000 1C00 0800 0084 0000 00E4 FFFF 0044 0000 0000 0000 0000 0000 0000 0000 1400 0100 C0FF 0000 4000 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0800 0500 3C00 0000 80FF 0B00 0000 0000
+        # 
+        # 0100 0100 FF00 0000
+        # 0800 0600 0000 0100 0400 0200 0000 0000 0100 0000 0200 0000 1C00 0800 0064 0000 00E4 FFFF 0064 0000 0000 0000 0000 0000 0000 0000 1400 0100 4000 0000 C0FF 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0400 0200 0000 0000 0100 0000 0200 0000 1C00 0800 0084 0000 00E4 FFFF 0044 0000 0000 0000 0000 0000 0000 0000 1400 0100 C0FF 0000 4000 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0400 0200 0000 0000 0100 0000 0200 0000 1C00 0800 0064 0000 00E4 FFFF 0064 0000 0000 0000 0000 0000 0000 0000 1400 0100 4000 0000 C0FF 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0800 0500 3C00 0000 1C00 0800 0084 0000 00E4 FFFF 0044 0000 0000 0000 0000 0000 0000 0000 1400 0100 C0FF 0000 4000 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0800 0500 3C00 0000 80FF 0B00 0000 0000
+        # 
+        # 0100 0100 FF00 0000
+        # 0800 0600 0000 0100 0400 0200 0000 0000 0100 0000 0200 0000 1C00 0800 0064 0000 00E4 FFFF 0064 0000 0000 0000 0000 0000 0000 0000 1400 0100 4000 0000 C0FF 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0400 0200 0000 0000 0100 0000 0200 0000 1C00 0800 0084 0000 00E4 FFFF 0044 0000 0000 0000 0000 0000 0000 0000 1400 0100 C0FF 0000 4000 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0400 0200 0000 0000 0100 0000 0200 0000 1C00 0800 0064 0000 00E4 FFFF 0064 0000 0000 0000 0000 0000 0000 0000 1400 0100 4000 0000 C0FF 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0800 0500 3C00 0000 1C00 0800 0084 0000 00E4 FFFF 0044 0000 0000 0000 0000 0000 0000 0000 1400 0100 C0FF 0000 4000 0000 0000 0000 0000 0000
+        # 0800 0500 8000 0200 0800 0500 3C00 0000 80FF 0B00 0000 0000
+
+        # 01000100FF0000000800060000000100040002000000000001000000020000001C0008000064000000E40000006400000000000000000000000000001400010040000000C0FF000000000000000000000800050080000200040002000000000001000000020000001C0008000084000000E4FFFF0044000000000000000000000000000014000100C0FF00004000000000000000000000000800050080000200040002000000000001000000020000001C0008000064000000E4FFFF006400000000000000000000000000001400010040000000C0FF000000000000000000000800050080000200080005003C0000001C0008000084000000E4FFFF0044000000000000000000000000000014000100C0FF00004000000000000000000000000800050080000200080005003C00000080FF0B0000000000
+        # 00000000FF0000000800060000000100040002000000000001000000020000001C0008000064000000E40000006400000000000000000000000000001400010040000000C0FF000000000000000000000800050080000200040002000000000001000000020000001C0008000084000000E4FFFF0044000000000000000000000000000014000100C0FF00004000000000000000000000000800050080000200040002000000000001000000020000001C0008000064000000E4FFFF006400000000000000000000000000001400010040000000C0FF000000000000000000000800050080000200080005003C0000001C0008000084000000E4FFFF0044000000000000000000000000000014000100C0FF00004000000000000000000000000800050080000200080005003C00000080FF0B0000000000
+        file.seek(self.lenSubSection0D, 1) 
         
         print("SubSection0E  len("+repr(self.lenSubSection0E)+") at : "+repr("{0:8X}".format(file.tell())))
         # black screen when nulled
@@ -724,16 +775,40 @@ class Room:
         file.seek(self.lenSubSection10, 1)
         
         print("SubSection11  len("+repr(self.lenSubSection11)+") at : "+repr("{0:8X}".format(file.tell())))
+        # in MAP013.MPD
+        # no noticable effect when full of 00 or FF
+        # 40300600050B0F151A1C000060300600050B0F151A1C000080300600050B0F151A1C0000A0300600050B0F151A1C000041300600050B0F151A1C000061300600050B0F151A1C000081300600050B0F151A1C0000A1300600050B0F151A1C000042300600050B0F151A1C000062300600050B0F151A1C000082300600050B0F151A1C0000A2300600050B0F151A1C000023300600050B0F151A1C000043300600050B0F151A1C000063300600050B0F151A1C000083300600050B0F151A1C0000A3300600050B0F151A1C0000
+        # 000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
         file.seek(self.lenSubSection11, 1)
         
 
-        # 12 or 13 is maybe floating stones section
-        print("SubSection12  len("+repr(self.lenSubSection12)+") at : "+repr("{0:8X}".format(file.tell())))
-        file.seek(self.lenSubSection12, 1)
+        print("FloatingStoneSection  len("+repr(self.lenFloatingStoneSection)+") at : "+repr("{0:8X}".format(file.tell())))
+        # SubSection12
+        # +$00    1    mpdGroupId (ref to the floating stone)
+        # +$01    1    ? translation type maybe
+        # +$02    2    ? init position ?
+        # +$04    2    ? init position ?
+        # +$06    2    padding
+        # +$08    4    pos 1 X
+        # +$012   4    pos 1 Z (or Y but height)
+        # +$016   4    pos 1 Y
+        # +$020   4    delay at pos 1
+        # +$024   4    pos 2 X
+        # +$028   4    pos 2 Z
+        # +$032   4    pos 2 Y
+        # +$036   4    delay at pos 2
+
+        # in MAP014.MPD
+        #                end  x       z       y   delay start x       z       y   delay                                                                                                                                                                                                                                                                 init  X       Z       Y
+        # 0234FF0FFE0300000000840000001C00000044003C0000000000640000001C00000064003C000000AEAD400002000000010000000100000000000000050000000000000000000080FBA4FFFF00000000055B00005A000000055B000000000000FBA4FFFF5A000000EE037900A8FE4000D0037900E4FC66005F61400058FA6600A2F3400040000000C8FE40008161400058FA6600A0F3400040000000AF38400058FA6600A0F340000000840000001C000000440000000000
+        # 0234FF0FFE0300000000840000001C00000044003C0000000000640000001C00000064003C000000AEAD400002000000010000000100000000000000050000000000000000000080FBA4FFFF00000000055B00005A000000055B000000000000FBA4FFFF5A000000EE037900A8FE4000D0037900E4FC66005F61400058FA6600A2F3400040000000C8FE40008161400058FA6600A0F3400040000000AF38400058FA6600A0F340000000840000001C000000440000000000
+        file.seek(self.lenFloatingStoneSection, 1)
         
-        # chest section or timed room section
-        print("SubSection13  len("+repr(self.lenSubSection13)+") at : "+repr("{0:8X}".format(file.tell())))
-        file.seek(self.lenSubSection13, 1)
+        
+        print("ChestInteractionSection  len("+repr(self.lenChestInteractionSection)+") at : "+repr("{0:8X}".format(file.tell())))
+        # SubSection13
+        # chest interaction section
+        file.seek(self.lenChestInteractionSection, 1)
         
         print("AKAOSubSection  len("+repr(self.lenAKAOSubSection)+") at : "+repr("{0:8X}".format(file.tell())))
         file.seek(self.lenAKAOSubSection, 1)

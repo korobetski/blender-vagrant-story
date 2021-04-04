@@ -79,6 +79,9 @@ class Color:
         self.A = a * 255
         self.update()
         return self
+    
+    def alphaFromGrey(self):
+        self.A = round((self.R + self.G + self.B) / 3)
 
     def toBytearray(self):
         return bytearray([self.R, self.G, self.B, self.A])

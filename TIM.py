@@ -256,13 +256,16 @@ class TIM16BPP:
 
         
 
-    def buildCLUT(self, x, y):
+    def buildCLUT(self, x, y, alpha = False):
         ox = x - self.fx
         oy = y - self.fy
         dec = oy * self.width + ox
         bufferArray = []
         for i in range(dec, dec+16):
-            bufferArray.append(self.colors[i])
+            col = self.colors[i]
+            if alpha == True:
+               col.alphaFromGrey() 
+            bufferArray.append(col)
         return bufferArray
 
     def build(self, clut):

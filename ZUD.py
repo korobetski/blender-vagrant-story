@@ -108,6 +108,7 @@ class ZUD:
             chiof.target = shpObj.parent  # Armature
             chiof.subtarget = self.shp.getWeaponBoneName()
             bpy.ops.constraint.childof_clear_inverse(constraint=chiof.name, owner="OBJECT")
+            wepObj.rotation_euler = (90, 0, 0)
             if self.header.idWEPType == 6:
                 # if its a staff
                 wepObj.location = (2.8, 0, 0)  # arbitrary value but seems not bad
@@ -118,6 +119,7 @@ class ZUD:
             chiof.target = shpObj.parent  # Armature
             chiof.subtarget = self.shp.getShieldBoneName()
             bpy.ops.constraint.childof_clear_inverse(constraint=chiof.name, owner="OBJECT")
+            shieldObj.rotation_euler = (90, 0, 0)
 
         if self.header.lenCSEQ > 0:
             self.commonSeq.buildAnimations(shpObj)

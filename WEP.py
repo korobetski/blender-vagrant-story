@@ -153,6 +153,8 @@ class WEP:
         self.tim.feed(file)
 
         self.rotations = []
+        # 00000000000007000000FF0F0000070000000000B0000700
+        # 0000000000000700000000000000070000000000B0000700
         # Rotations
         # not fully understood yet
         # the first row is always 0000000000000700 for all 127 .WEP files change values doesn't have a visual effect in game
@@ -190,7 +192,7 @@ class WEP:
             palcol = palette.colors.new()
             palcol.color = (col.R/255, col.G/255, col.B/255)
 
-        vs_weapon_materials = ["Wood","Leather","Bronze","Iron","Hagane","Silver","Damascus"]
+        vs_weapon_materials = ["Wood", "Leather", "Bronze", "Iron", "Hagane", "Silver", "Damascus"]
         for i in range(0, len(self.tim.textures)):
             mat = bpy.data.materials.new(name=str(self.name + "_"+vs_weapon_materials[i]+"_Mat"))
             # we add the palette reference in a custom property of the material

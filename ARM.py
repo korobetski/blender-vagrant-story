@@ -16,6 +16,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
+from enum import Enum
 from . import VertexSection, FaceSection, Kildean
 
 
@@ -111,15 +112,20 @@ class ARM:
 
             self.rooms[i].numMarkers = struct.unpack("I", file.read(4))[0]
             self.rooms[i].markers = []
+            #print("ARM Room markers at : "+repr("{0:8X}".format(file.tell())))
             for j in range (0, self.rooms[i].numMarkers):
-                self.rooms[i].markers.append(struct.unpack("4B", file.read(4)))
+                mark = Marker()
+                mark.feed(file)
+                self.rooms[i].markers.append(mark)
+                #print(mark)
 
         # Rooms Names
         if (file.tell() + 36 <= self.filesize):
             for i in range (0, self.numRooms):
+                # structure maybe different in a no french Vagrant Story
                 nums1 = struct.unpack("3H", file.read(6))
-                rawName = file.read(24)
-                roomName = Kildean.Translate(rawName).split("\r\n")[0]
+                # we split the name to skip 0x00 padding
+                roomName = Kildean.Translate(file.read(24)).split("\r\n")[0]
                 self.rooms[i].name = roomName
                 nums2 = struct.unpack("3H", file.read(6))
 
@@ -199,3 +205,30 @@ class Edge:
     def __init__(self):
         self.isFloor = False
         self.vertices = []
+
+class Marker:
+    def __init__(self):
+        self.vertexId = 0
+        self.exitTo = 0
+        self.markerType = 0
+        self.lockId = 0
+        # http://datacrystal.romhacking.net/wiki/Vagrant_Story:misc_items_list with a decalage
+        # 0x41 = Bronze Key -> first usable key id
+        # 0x49 = Chamomile Sigil
+        # 0x59 = Verbena Sigil
+        # 0x60 = Mandrake Sigil -> last usable key id
+    def __repr__(self):
+        return ("Marker vid : "+repr(self.vertexId)+", exitTo : "+repr(self.exitTo)+", markerType : "+repr(self.markerType)+", lockId : "+repr(self.lockId))
+    def feed(self, file):
+        self.vertexId, self.exitTo, self.markerType, self.lockId = struct.unpack("4B", file.read(4))
+
+class MarkerType(Enum):
+    DOOR = 0
+    CENTER = 1 # Room center to display the Ashley icon
+    SAVE = 2
+    EXIT = 4 # also display the destination name in game
+    WORKSHOP = 8 # Workshop + Save + Container
+    CONTAINER = 16 # only a container
+    SAVE_CONTAINER = 18 # Container + Save
+    WORKSHOP2 = 24 # Workshop + Save + Container
+    NOTHING = 32

@@ -131,24 +131,56 @@ class MPDFace:
         self.vertices = []
         self.colors = []
         self.uv = []
+        self.doubleSided = False
+        self.translucent = False
     def __repr__(self):
         return("MPDFace : "+" type : "+repr(self.type)+", clutId : "+repr(self.clutId)+", textureId : "+repr(self.textureId))
     def feed(self, file, group, isQuad = False):
         self.quad = isQuad
         # fuck that mess
-        # Triangle vt1  vt2  vt3  col1  col2  u1 col3  v1 u2-v2  clt  u3-v3  tex
-        # Quad     vt1  vt2  vt3  col1  col2  u1 col3  v1 u2-v2  clt  u3-v3  tex  vt4  u4 col4  v4
+        # Triangle vt1  vt2  vt3  col1 ty col2  u1 col3  v1 u2-v2  clt  u3-v3  tex
+        # Quad     vt1  vt2  vt3  col1 ty col2  u1 col3  v1 u2-v2  clt  u3-v3  tex  vt4  u4 col4  v4
         p1x, p1y, p1z = struct.unpack("3h", file.read(6))
+        p1x += group.header[4]
+        p1y += group.header[6]
+        p1z += group.header[8]
+            
         p2x, p2y, p2z = struct.unpack("3b", file.read(3))
         p3x, p3y, p3z = struct.unpack("3b", file.read(3))
         r1, g1, b1, self.type = struct.unpack("4B", file.read(4))
         r2, g2, b2, u1, r3, g3, b3, v1, u2, v2 = struct.unpack("10B", file.read(10))
         self.clutId, u3, v3, self.textureId = struct.unpack("H2BH", file.read(6))
+        if self.quad == True:
+            p4x, p4y, p4z, u4, r4, g4, b4, v4 = struct.unpack("3b5B", file.read(8))
+        # types :
+        # 34 is a triangle
+        # 35 double sided tri ?
+        # 36 is maybe a translucent triangle
+        # 37 double sided translucent tri ?
+        # -- maybe its never used
+        # 38 v colored without texture ?
+        # 39 ? v colored double
+        # 3A ? v colored with translucent
+        # 3B ? v colored with translucent
+        
+        # 3C is a quad
+        # 3D is maybe double sided
+        # 3E is maybe translucent
+        # 3F is maybe double sided and translucent
+        # 40 hard crash !
+        if self.type == 0x3E:
+            p1z += 0.0001
+            self.translucent = True
+        if self.type == 0x3F:
+            self.doubleSided = True
+            self.translucent = True
+        
         self.materialRef = repr(self.textureId)+"@"+repr(self.clutId)
         if group.materialRefs.__contains__(self.materialRef) == False:
             group.materialRefs.append(self.materialRef)
-        if self.quad == True:
-            p4x, p4y, p4z, u4, r4, g4, b4, v4 = struct.unpack("3b5B", file.read(8))
+            group.materialSided.append(self.doubleSided)
+            group.materialTrans.append(self.translucent)
+
 
         self.vertices = []
         vertex = VertexSection.Vertex()

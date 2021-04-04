@@ -85,7 +85,7 @@ class ZND:
                 return tim
         return self.tims[0]
 
-    def getCLUT(self, clutId):
+    def getCLUT(self, clutId, alpha = False):
 
         x = ( int(clutId) * 16 ) % 1024
         y = math.floor( ( int(clutId) * 16 ) / 1024 )
@@ -93,15 +93,15 @@ class ZND:
         clut = None
         for tim in self.tims:
             if ( tim.fx <= x and tim.fx + tim.width > x and tim.fy <= y and tim.fy + tim.height > y ):
-                clut = tim.buildCLUT( x, y )
+                clut = tim.buildCLUT( x, y, alpha)
                 break
         return clut
 
-    def getPixels(self, ref):
+    def getPixels(self, ref, alpha = False):
         textureId, clutId = ref.split("@")
         textureTIM = self.getTIM( int(textureId) )
-        clut = self.getCLUT( int(clutId) )
-        return textureTIM.build( clut )
+        clut = self.getCLUT( int(clutId), alpha )
+        return textureTIM.build(clut)
 
 class ZNDHeader:
     def __init__(self):
