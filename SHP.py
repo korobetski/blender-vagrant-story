@@ -39,7 +39,7 @@ class Import(bpy.types.Operator, ImportHelper):
 
 
     def execute(self, context):
-        keywords = self.as_keywords(ignore=("filter_glob"))
+        keywords = self.as_keywords(ignore=("axis_forward","axis_up","filter_glob"))
         BlenderImport(self, context, **keywords)
 
         return {"FINISHED"}
@@ -91,9 +91,9 @@ def BlenderImport(operator, context, filepath, bool_anim_trans = False):
 
     # selecting armature
     shpObj.parent.name = bpy.path.display_name(filepath)
-    shpObj.parent.select_set(True)
-    bpy.context.view_layer.objects.active = shpObj.parentIndex
-    
+    #shpObj.parent.select_set(True)
+    #bpy.context.view_layer.objects.active = shpObj.parentIndex
+
     return {"FINISHED"}
 
 class SHP:
