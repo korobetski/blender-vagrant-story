@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -16,7 +16,7 @@ bl_info = {
 import struct
 
 def parse(file, numBones):
-    print("parsing "+repr(numBones)+" bones...")
+    #print("parsing "+repr(numBones)+" bones...")
     bones = []
     for i in range(0, numBones):
         bone = Bone()
@@ -24,7 +24,7 @@ def parse(file, numBones):
         # in theory parent bone are defined before
         if bone.parentIndex < numBones:
             bone.parent = bones[bone.parentIndex]
-        print(bone)
+        #print(bone)
         bones.append(bone)
     return bones
 

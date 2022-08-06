@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -55,14 +55,14 @@ class ZND:
         self.parse(file)
         file.close()
     def parse(self, file):
-        print("parsing ZND...")
+        #print("parsing ZND...")
 
         self.header.feed(file)
 
         # we skip MPD section
         # and we go to TIM Section
 
-        file.seek(self.header.ptrTIM)  
+        file.seek(self.header.ptrTIM)
         timSectionLen, uk1, uk2, uk3, numTims = struct.unpack("5I", file.read(20))
         self.tims = []
         #self.buffer = TIM.FrameBuffer()
@@ -74,7 +74,7 @@ class ZND:
             #print(tim)
             self.tims.append(tim)
             file.seek(timptr+tlen)
-        
+
         #self.buffer.buildTexture()
 
     def getTIM(self, idx):
@@ -115,4 +115,3 @@ class ZNDHeader:
         self.unk = 0
     def feed(self, file):
         self.ptrMPD, self.lenMPD, self.ptrEnemies, self.lenEnemies, self.ptrTIM, self.lenTIM, self.WAVEindex = struct.unpack("6IB", file.read(25))
-

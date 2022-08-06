@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -79,7 +79,7 @@ class Color:
         self.A = a * 255
         self.update()
         return self
-    
+
     def alphaFromGrey(self):
         self.A = round((self.R + self.G + self.B) / 3)
 
@@ -115,7 +115,7 @@ class Color:
     def update(self):
         self.code = self.to32bits()
         self.L = self.R + self.G + self.B + self.A
-        
+
 White = Color().White()
 Black = Color().Black()
 

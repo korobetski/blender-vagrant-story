@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -44,8 +44,10 @@ classes = (
     WEP.Import,
     WEP.Export,
     SHP.Import,
+    SEQ.Import,
     ZUD.Import,
     MPD.Import,
+    #ZND.Import,
     EFFECT.Import,
     ARM.Import,
     MaterialPalette,
@@ -73,10 +75,10 @@ def unregister():
 def menu_func_import(self, context):
     self.layout.operator(WEP.Import.bl_idname, text="Vagrant Story Weapon (.WEP)")
     self.layout.operator(SHP.Import.bl_idname, text="Vagrant Story Character Shape (.SHP)")
-    # self.layout.operator(ImportSEQ.bl_idname, text="Vagrant Story Animations Sequence (.SEQ)")
+    self.layout.operator(SEQ.Import.bl_idname, text="Vagrant Story Animations Sequence (.SEQ)")
     self.layout.operator(ZUD.Import.bl_idname, text="Vagrant Story Zone Unit Datas (.ZUD)")
     self.layout.operator(MPD.Import.bl_idname, text="Vagrant Story Map Datas (.MPD)")
-    #self.layout.operator(ImportZND.bl_idname,text="Vagrant Story Zone Datas(.ZND)")
+    #self.layout.operator(ZND.Import.bl_idname,text="Vagrant Story Zone Datas(.ZND)")
     self.layout.operator(EFFECT.Import.bl_idname, text="Vagrant Story Effect (.P)")
     self.layout.operator(ARM.Import.bl_idname, text="Vagrant Story Maps (.ARM)")
 

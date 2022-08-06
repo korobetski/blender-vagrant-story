@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -39,7 +39,7 @@ def BlenderImport(operator, context, filepath):
     zud = ZUD()
     # we read datas from a file
     zud.loadFromFile(filepath)
-    
+
     # Creating Geometry and Meshes for Blender
     zud.buildGeometry()
 
@@ -62,7 +62,7 @@ class ZUD:
         file.close()
     def parse(self, file):
         self.header.feed(file)
-        print(self)
+        #print(self)
 
         # SHP SECTION
         file.seek(self.header.ptrSHP)
@@ -99,7 +99,7 @@ class ZUD:
             self.battleSeq.parse(file)
 
     def buildGeometry(self):
-        print("ZUD Building...")
+        #print("ZUD Building...")
 
         shpObj = self.shp.buildGeometry()
         if self.header.idWEP != 0:

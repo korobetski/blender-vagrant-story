@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -40,16 +40,16 @@ class Import(bpy.types.Operator, ImportHelper):
 def BlenderImport(operator, context, filepath):
     effect = Effect()
 
-    print("filepath : "+filepath)
-    print("bpy.path.abspath : "+bpy.path.abspath(filepath))
-    print("bpy.path.basename : "+bpy.path.basename(filepath))
+    #print("filepath : "+filepath)
+    #print("bpy.path.abspath : "+bpy.path.abspath(filepath))
+    #print("bpy.path.basename : "+bpy.path.basename(filepath))
 
     if (bpy.path.basename(filepath) == "E000.P"):
         # Special case, all other fx starts at 1, E000_0.FBC must be black and white
         fbcPath = filepath.replace(bpy.path.basename(filepath), "E000_0.FBC")
         fbc = FBC()
         fbc.loadFromFile(fbcPath)
-        print(fbc)
+        #print(fbc)
 
         fbtPath = filepath.replace(bpy.path.basename(filepath), "E000_0.FBT")
         fbt = FBT()
@@ -62,7 +62,7 @@ def BlenderImport(operator, context, filepath):
         if(os.path.isfile(fbcPath)):
             fbc = FBC()
             fbc.loadFromFile(fbcPath)
-            print(fbc)
+            #print(fbc)
             effect.FBC = fbc
             # one effect can have up to 7 FBT and somtimes there is no FBC and FBT, maybe empty fx...
             for i in range(1,9):
@@ -80,10 +80,10 @@ def BlenderImport(operator, context, filepath):
     if effect.FBC != None:
         p.numPalettes = effect.FBC.numPalettes
     p.loadFromFile(filepath)
-    print(p)
+    #print(p)
     effect.P = p
-    
-    
+
+
 
     bpy.ops.mesh.primitive_plane_add()
     plane = bpy.context.active_object
@@ -98,7 +98,7 @@ def BlenderImport(operator, context, filepath):
 
     if effect.FBC != None:
         pixmap = []
-        h = effect.FBTs[0].height * effect.FBC.numPalettes    
+        h = effect.FBTs[0].height * effect.FBC.numPalettes
         w = effect.FBTs[0].width
 
         for i in range(0, h):
@@ -136,7 +136,7 @@ def BlenderImport(operator, context, filepath):
                 co_rest = v.co
                 sprite_co = (frame.v_co[v.index][0]/100, frame.v_co[v.index][1]/100, 0.0)
                 insert_keyframe(fcurves, t, sprite_co)
-                
+
             for face in mesh.polygons:
                 for vert_idx, loop_idx in zip(face.vertices, face.loop_indices):
                     #uvlayer.data[loop_idx].uv = (xdec + frame.uvs[loop_idx][0], frame.uvs[loop_idx][1])
@@ -197,7 +197,7 @@ class P:
                 self.frames.append(frame)
             else:
                 break
-        
+
         for i in range(0, loop):
             frame = self.frames[i]
             if (file.tell() + 24 <= self.filesize):
@@ -251,8 +251,8 @@ class FBT:
         pad = math.floor(self.filesize / size)
         self.height *= pad
         size = self.width * self.height
-        
-        print("FBT parse : "+" height : "+repr(self.height))
+
+        #print("FBT parse : "+" height : "+repr(self.height))
         self.texture = []
         clutPtr = file.tell()
         for i in range(0, len(palettes)):
@@ -329,7 +329,7 @@ class EffectFrame:
             self.textureId = 5
         elif (self.head[2] == 0xBF or self.head[2] == 0xDF):
             self.textureId = 6
-        
+
         dx = self.textureId * 128
         dy = self.paletteId * texture_height
 
@@ -343,6 +343,6 @@ class EffectFrame:
         self.uvs.append((u2, v2))
         self.uvs.append((u1, v2))
 
-        
-        print(self)
+
+        #print(self)
         #print(" u1 : "+repr(u1)+" ,  u2 : "+repr(u2)+" ,  v1 : "+repr(v1)+" ,  v2 : "+repr(v2))

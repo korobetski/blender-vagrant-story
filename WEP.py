@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -81,7 +81,7 @@ def BlenderExport(operator, context, filepath):
     fp.close()
 
     return {"FINISHED"}
-    
+
 class WEP:
     def __init__(self):
         self.name = ".WEP"
@@ -111,7 +111,7 @@ class WEP:
 
         # WEP HEADER
         self.header.feed(file)
-        print(self)
+        #print(self)
 
         # WEP BONES SECTION
         self.bones = BoneSection.parse(file, self.header.numBones)
@@ -165,10 +165,10 @@ class WEP:
             # with u2 = FFC3 the weapon seems to rotate 90° (or maybe a multiple)
             # with u2 = 0077 the weapon seems to rotate 180°(or maybe a multiple)
             u1, u2, u3, u4 = struct.unpack("<4h", file.read(8))
-            print("rots : "+" u1 : "+repr(u1)+" - u2 : "+repr(u2)+" - u3 : "+repr(u3)+" - u4 : "+repr(u4))
+            #print("rots : "+" u1 : "+repr(u1)+" - u2 : "+repr(u2)+" - u3 : "+repr(u3)+" - u4 : "+repr(u4))
             self.rotations.append([u1, u2, u3, u4])
     def buildGeometry(self, material_index = 0):
-        print("WEP Building...")
+        #print("WEP Building...")
 
         # Creating Geometry and Mesh for Blender
         mesh_name = self.name
@@ -226,7 +226,7 @@ class WEP:
         uvlayer = blender_mesh.uv_layers.new()
         face_uvs = self.getUVsForBlender()
         for face in blender_mesh.polygons:
-            face.material_index = material_index  # XD cherry on the cake 
+            face.material_index = material_index  # XD cherry on the cake
             # loop_idx increment for each vertex of each face so if there is 9 triangle -> 9*3 = 27 loop_idx, even if some vertex are common between faces
             for vert_idx, loop_idx in zip(face.vertices, face.loop_indices):
                 # uvs needs to be scaled from texture W&H

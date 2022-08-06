@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -12,7 +12,7 @@ import struct
 from . import color, VertexSection
 
 def parse(file, numFaces):
-    print("parsing "+repr(numFaces)+" faces...")
+    #print("parsing "+repr(numFaces)+" faces...")
     faces = []
     coloredVertices = False
     for i in range(0, numFaces):
@@ -22,7 +22,7 @@ def parse(file, numFaces):
         # if a face use vertex color so the next will do the same
         if face.isColored == True:
             coloredVertices = True
-        print(face)
+        #print(face)
         faces.append(face)
     return faces
 
@@ -144,7 +144,7 @@ class MPDFace:
         p1x += group.header[4]
         p1y += group.header[6]
         p1z += group.header[8]
-            
+
         p2x, p2y, p2z = struct.unpack("3b", file.read(3))
         p3x, p3y, p3z = struct.unpack("3b", file.read(3))
         r1, g1, b1, self.type = struct.unpack("4B", file.read(4))
@@ -162,7 +162,7 @@ class MPDFace:
         # 39 ? v colored double
         # 3A ? v colored with translucent
         # 3B ? v colored with translucent
-        
+
         # 3C is a quad
         # 3D is maybe double sided
         # 3E is maybe translucent
@@ -174,7 +174,7 @@ class MPDFace:
         if self.type == 0x3F:
             self.doubleSided = True
             self.translucent = True
-        
+
         self.materialRef = repr(self.textureId)+"@"+repr(self.clutId)
         if group.materialRefs.__contains__(self.materialRef) == False:
             group.materialRefs.append(self.materialRef)

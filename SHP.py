@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -64,7 +64,7 @@ class Export(bpy.types.Operator, ExportHelper):
 
 
 def BlenderImport(operator, context, filepath, bool_anim_trans = False):
-    print("bool_anim_trans : "+repr(bool_anim_trans))
+    #print("bool_anim_trans : "+repr(bool_anim_trans))
     shp = SHP()
     # we read datas from a file
     shp.loadFromFile(filepath)
@@ -72,15 +72,15 @@ def BlenderImport(operator, context, filepath, bool_anim_trans = False):
     shpObj = shp.buildGeometry()
 
     # we seek a corresponding SEQ to display the SHP in a better way
-    print("filepath : "+filepath)
-    print("bpy.path.basename : "+bpy.path.basename(filepath))
-    print("bpy.path.display_name : "+bpy.path.display_name(filepath))
+    #print("filepath : "+filepath)
+    #print("bpy.path.basename : "+bpy.path.basename(filepath))
+    #print("bpy.path.display_name : "+bpy.path.display_name(filepath))
     topa = ["_COM.SEQ","_BT1.SEQ","_BT2.SEQ","_BT3.SEQ","_BT4.SEQ","_BT5.SEQ","_BT6.SEQ","_BT7.SEQ","_BT8.SEQ","_BT9.SEQ","_BTA.SEQ"]
     seq = None
     for seqpath in topa:
         seqfilepath = filepath.replace(bpy.path.basename(filepath), bpy.path.display_name(filepath)+seqpath)
         if os.path.isfile(seqfilepath):
-            print("Corresponding SEQ found at : "+repr(seqfilepath))
+            #print("Corresponding SEQ found at : "+repr(seqfilepath))
 
             seq = SEQ.SEQ()
             seq.loadFromFile(seqfilepath)
@@ -121,7 +121,7 @@ class SHP:
 
         # SHP HEADER
         self.header.feed(file)
-        print(self)
+        #print(self)
 
         # SHP BONES SECTION
         self.bones = BoneSection.parse(file, self.header.numBones)
@@ -159,10 +159,10 @@ class SHP:
         self.tim = TIM.SHPTIM()
         self.tim.doubleClut = self.hasColoredVertex
         self.tim.feed(file)
-        print(self.tim)
+        #print(self.tim)
 
     def buildGeometry(self):
-        print("SHP Building...")
+        #print("SHP Building...")
 
         view_layer = bpy.context.view_layer
         # Creating Bones for Blender
@@ -273,6 +273,12 @@ class SHP:
         vcol_layer = blender_mesh.vertex_colors.new()
         colors = self.getVColForBlender()
         face_uvs = self.getUVsForBlender()
+
+        # special case
+        if self.name == "50":
+            #print(self.name)
+            self.tim.textureWidth = self.tim.textureHeigth = 256
+
         for face in blender_mesh.polygons:
             for vert_idx, loop_idx in zip(face.vertices, face.loop_indices):
                 # uvs needs to be scaled from texture W&H

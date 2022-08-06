@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -41,7 +41,7 @@ def BlenderImport(operator, context, filepath):
     arm = ARM()
     # we read datas from a file
     arm.loadFromFile(filepath)
-    
+
     # Creating Geometry and Meshes for Blender
     arm.buildGeometry()
 
@@ -67,7 +67,7 @@ class ARM:
             room = ARMRoom()
             room.u1, room.length, room.zoneId, room.roomId = struct.unpack("2I2H", file.read(12))
             self.rooms.append(room)
-        
+
         for i in range (0, self.numRooms):
             self.rooms[i].numVertices = struct.unpack("I", file.read(4))[0]
             self.rooms[i].vertices = []
@@ -93,7 +93,7 @@ class ARM:
                 face.type = 0x2C
                 face.vertices = struct.unpack("4B", file.read(4))
                 self.rooms[i].faces.append(face)
-            
+
             self.rooms[i].numFloorEdges = struct.unpack("I", file.read(4))[0]
             self.rooms[i].edges = []
             for j in range (0, self.rooms[i].numFloorEdges):
@@ -102,7 +102,7 @@ class ARM:
                 edge.vertices = struct.unpack("2B", file.read(2))
                 padding = struct.unpack("2B", file.read(2))
                 self.rooms[i].edges.append(edge)
-            
+
             self.rooms[i].numCeilEdges = struct.unpack("I", file.read(4))[0]
             for j in range (0, self.rooms[i].numCeilEdges):
                 edge = Edge()
@@ -131,9 +131,9 @@ class ARM:
 
 
     def buildGeometry(self):
-        print("ARM Building...")
+        #print("ARM Building...")
 
-        
+
         for i in range (0, self.numRooms):
             # Creating Geometry and Mesh for Blender
             room = self.rooms[i]
@@ -178,7 +178,7 @@ class ARMRoom:
     def __repr__(self):
         return("(--"+repr(self.name)+" ARM ROOM-- | )")
 
-    
+
     def getVerticesForBlender(self):
         bvertices = []
         for vertex in self.vertices:

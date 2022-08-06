@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -213,7 +213,7 @@ class TIM16BPP:
         self.isCLUT = False
         self.bytes = bytearray()
         self.colors = []
-    
+
     def __repr__(self):
         return (
             "(--TIM16BPP-- |  "+ " offset : "+repr(self.offset)+ ", idx : "+repr(self.idx)+ ", h : "+repr(self.h)+ ", bpp : "+repr(self.bpp)+ ", imgLen : "
@@ -247,14 +247,14 @@ class TIM16BPP:
         #    for i in range(0, size):
         #        c = self.bytes[i]
         #        l = ( ( c & 0xF0 ) >> 4 )
-        #        r = ( c & 0x0F )            
+        #        r = ( c & 0x0F )
         #        pixmap.extend(color.GreyCLUT[r].toFloat())
         #        pixmap.extend(color.GreyCLUT[l].toFloat())
         #    texImage = bpy.data.textures.new("TIM16BPP-"+repr(self.idx), 'IMAGE')
         #    texImage.image = bpy.data.images.new("TIM16BPP-"+repr(self.idx), self.width*4, self.height)
         #    texImage.image.pixels = pixmap
 
-        
+
 
     def buildCLUT(self, x, y, alpha = False):
         ox = x - self.fx
@@ -264,7 +264,7 @@ class TIM16BPP:
         for i in range(dec, dec+16):
             col = self.colors[i]
             if alpha == True:
-               col.alphaFromGrey() 
+               col.alphaFromGrey()
             bufferArray.append(col)
         return bufferArray
 
@@ -274,7 +274,7 @@ class TIM16BPP:
         for i in range(0, size):
             c = self.bytes[i]
             l = ( ( c & 0xF0 ) >> 4 )
-            r = ( c & 0x0F )            
+            r = ( c & 0x0F )
             pixmap.extend(clut[r].toFloat())
             pixmap.extend(clut[l].toFloat())
         return pixmap
@@ -298,11 +298,11 @@ class FrameBuffer:
         self.buffer[i + 1] = col.G
         self.buffer[i + 2] = col.B
         self.buffer[i + 3] = col.A
-    
+
     def buildTexture(self):
         pixmap = []
         for i in range(0, self.r):
-            pixmap.append(self.buffer[i]/255)    
+            pixmap.append(self.buffer[i]/255)
         texImage = bpy.data.textures.new("FrameBuffer", 'IMAGE')
         texImage.image = bpy.data.images.new("FrameBuffer_Tex", self.width, self.height)
         texImage.image.pixels = pixmap

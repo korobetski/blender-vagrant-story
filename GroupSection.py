@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -17,14 +17,14 @@ from . import FaceSection
 
 
 def parse(file, numGroups, bones):
-    print("parsing "+repr(numGroups)+" groups...")
+    #print("parsing "+repr(numGroups)+" groups...")
     groups = []
     for i in range(0, numGroups):
         group = Group()
         group.feed(file, i)
         group.bone = bones[group.boneIndex]
         group.bone.group = group  # double reference
-        print(group)
+        #print(group)
         groups.append(group)
     return groups
 
@@ -60,7 +60,7 @@ class MDPGroup:
         self.materialRefs = []
         self.materialSided = []
         self.materialTrans =  []
-    
+
     def __repr__(self):
         return("Grp:"+" T: "+repr(self.numTri)+", Q: "+repr(self.numQuad)+", "+repr(self.header))
 
@@ -89,7 +89,7 @@ class MDPGroup:
         self.materialTrans =  []
         self.numTri, self.numQuad = struct.unpack("2I", file.read(8))
         self.numFaces = self.numTri + self.numQuad
-          
+
         for j in range(0, self.numTri):
             f = FaceSection.MPDFace()
             f.feed(file, self, False)

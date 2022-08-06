@@ -2,8 +2,8 @@ bl_info = {
     "name": "Vagrant Story file formats Add-on",
     "description": "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC).",
     "author": "Sigfrid Korobetski (LunaticChimera)",
-    "version": (2, 1),
-    "blender": (2, 92, 0),
+    "version": (2, 12),
+    "blender": (3, 2, 0),
     "location": "File > Import-Export",
     "category": "Import-Export",
 }
@@ -20,7 +20,7 @@ import bpy
 import mathutils
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
 from bpy_extras.io_utils import ExportHelper, ImportHelper
-from . import VS
+from . import VS, SHP
 
 
 # CALLED BY BLENDER
@@ -33,6 +33,11 @@ class Import(bpy.types.Operator, ImportHelper):
 
     filepath: bpy.props.StringProperty(default="", subtype="FILE_PATH")
     filter_glob: bpy.props.StringProperty(default="*.SEQ", options={"HIDDEN"})
+    bool_anim_trans: bpy.props.BoolProperty(
+        name="Anims Translation",
+        description="Add translation when importing SEQ animations ?",
+        default=False
+    )
 
     def execute(self, context):
         keywords = self.as_keywords(ignore=("axis_forward","axis_up","filter_glob"))
@@ -40,10 +45,26 @@ class Import(bpy.types.Operator, ImportHelper):
 
         return {"FINISHED"}
 
-def BlenderImport(operator, context, filepath):
+def BlenderImport(operator, context, filepath, bool_anim_trans = False):
+    x = bpy.path.basename(filepath).split("_")
+    shpfilepath = filepath.replace(bpy.path.basename(filepath), x[0]+".SHP")
+    shp = SHP.SHP()
+    # we read datas from a file
+    shp.loadFromFile(shpfilepath)
+    # we build geometry from datas
+    shpObj = shp.buildGeometry()
+
     seq = SEQ()
     # we read datas from a file
     seq.loadFromFile(filepath)
+    seq.buildAnimations(shpObj, bool_anim_trans)
+    shpObj.parent.animation_data.action = bpy.data.actions[seq.name + "_Animation_0"]
+
+    shpObj.parent.name = bpy.path.display_name(shpfilepath)
+    #shpObj.parent.select_set(True)
+    #bpy.context.view_layer.objects.active = shpObj.parentIndex
+
+    return {"FINISHED"}
 
 def rot13toRad(angle):
     return angle * (math.pi / 4096)
