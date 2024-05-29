@@ -177,11 +177,11 @@ class WEP:
 
         # https://docs.blender.org/api/current/bpy.types.Mesh.html#bpy.types.Mesh.polygon_layers_int
         # we can't store datas on faces, so we store face datas in mesh polygon layers instead
-        side_layer = blender_mesh.polygon_layers_int.new(name='side')
-        flag_layer = blender_mesh.polygon_layers_int.new(name='flag')
-        for face in self.faces:
-            side_layer.data[face.index].value = face.side
-            flag_layer.data[face.index].value = face.flag
+        #side_layer = blender_mesh.polygon_layers_int.new(name='side')
+        #flag_layer = blender_mesh.polygon_layers_int.new(name='flag')
+        #for face in self.faces:
+        #    side_layer.data[face.index].value = face.side
+        #    flag_layer.data[face.index].value = face.flag
 
         # Creating Materials & Textures for Blender
         # https://docs.blender.org/api/current/bpy.types.Material.html
@@ -210,8 +210,9 @@ class WEP:
 
             # maybe i should consider using a simpler material... VS doesn't need a PBR Material :D
             bsdf = mat.node_tree.nodes["Principled BSDF"]
-            bsdf.inputs["Specular"].default_value = 0
+            bsdf.inputs["Roughness"].default_value = 0
             bsdf.inputs["Metallic"].default_value = 0
+            bsdf.inputs[12].default_value = 0 # specular
             texImage = mat.node_tree.nodes.new("ShaderNodeTexImage")
             texImage.image = bpy.data.images.new(str(self.name + "_"+vs_weapon_materials[i]+"_Tex"), self.tim.textureWidth, self.tim.textureHeigth)
             texImage.image.pixels = self.tim.textures[i]

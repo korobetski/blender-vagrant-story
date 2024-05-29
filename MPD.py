@@ -124,8 +124,9 @@ class MPD:
 
             # maybe i should consider using a simpler material... VS doesn't need a PBR Material :D
             bsdf = mat.node_tree.nodes["Principled BSDF"]
-            bsdf.inputs["Specular"].default_value = 0
+            bsdf.inputs["Roughness"].default_value = 0
             bsdf.inputs["Metallic"].default_value = 0
+            bsdf.inputs[12].default_value = 0 # specular
             texImage = mat.node_tree.nodes.new("ShaderNodeTexImage")
             texImage.image = bpy.data.images.new(str(ref+"_TEX"), 256, 256)
             texImage.image.pixels = znd.getPixels(ref, translucent)

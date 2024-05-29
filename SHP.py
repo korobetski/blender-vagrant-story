@@ -169,11 +169,10 @@ class SHP:
         armature = bpy.data.armatures.new("Armature")
         arm_obj = bpy.data.objects.new("Armature", armature)
         view_layer.active_layer_collection.collection.objects.link(arm_obj)
-        armature_data = arm_obj
         # Must make armature active and in edit mode to create a bone
-        view_layer.objects.active = armature_data
-        bpy.ops.object.mode_set(mode="EDIT", toggle=False)
-        edit_bones = armature_data.data.edit_bones
+        view_layer.objects.active = arm_obj
+        bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+        edit_bones = arm_obj.data.edit_bones
         for vs_bone in self.bones:
             blender_bone = edit_bones.new(vs_bone.name)
             blender_bone.use_relative_parent = False
@@ -221,8 +220,9 @@ class SHP:
             mat.blend_method = "CLIP"  # to handle alpha cutout
             # maybe i should consider using a simpler material... VS doesn't need a PBR Material :D
             bsdf = mat.node_tree.nodes["Principled BSDF"]
-            bsdf.inputs["Specular"].default_value = 0
+            bsdf.inputs["Roughness"].default_value = 0
             bsdf.inputs["Metallic"].default_value = 0
+            bsdf.inputs[12].default_value = 0 # specular
             texImage = mat.node_tree.nodes.new("ShaderNodeTexImage")
             texImage.image = bpy.data.images.new(str(self.name + "_Tex"+str(i)), self.tim.textureWidth, self.tim.textureHeigth)
             texImage.image.pixels = self.tim.textures[i]
