@@ -1,0 +1,35 @@
+schema_version = "1.0.0"
+
+id = "vagrant_story_files_formats"
+version = "2.13.0"
+name = "Vagrant Story file formats Add-on"
+tagline = "Import-Export Vagrant Story file formats (WEP, SHP, SEQ, ZUD, MPD, ZND, P, FBT, FBC)."
+maintainer = "Sigfrid Korobetski <LunaticChimera@gmail.com>"
+type = "add-on"
+
+# Optional: add-ons can list which resources they will require:
+# * "files" (for access of any filesystem operations)
+# * "network" (for internet access)
+# * "clipboard" (to read and/or write the system clipboard)
+# * "camera" (to capture photos and videos)
+# * "microphone" (to capture audio)
+permissions = ["files"]
+
+# Optional link to documentation, support, source files, etc
+# website = "http://extensions.blender.org/add-ons/my-example-package/"
+github = "https://github.com/korobetski/blender-vagrant-story"
+discord = "https://discord.gg/BRgsK77zkf"
+
+# Optional list defined by Blender and server, see:
+# https://docs.blender.org/manual/en/dev/extensions/tags.html
+tags = ["Animation", "Sequencer"]
+
+blender_version_min = "4.2.0"
+# Optional: maximum supported Blender version
+# blender_version_max = "5.1.0"
+
+# License conforming to https://spdx.org/licenses/ (use "SPDX: prefix)
+# https://docs.blender.org/manual/en/dev/extensions/licenses.html
+license = [
+  "SPDX:EUPL-1.2",
+]
